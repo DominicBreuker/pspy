@@ -1,12 +1,11 @@
 package dev
 
 import (
-	"fmt"
-	"io/ioutil"
 	"log"
-	"strconv"
+	"time"
 
-	"github.com/fsnotify/fsnotify"
+	"github.com/dominicbreuker/pspy/internal/inotify"
+	"github.com/dominicbreuker/pspy/internal/process"
 )
 
 type Process struct {
@@ -30,78 +29,47 @@ func Monitor() {
 }
 
 func watch() {
-	watcher, err := fsnotify.NewWatcher()
+	ping := make(chan struct{})
+	in, err := inotify.NewInotify(ping)
 	if err != nil {
-		log.Fatalf("Can't create file system watcher: %v", err)
+		log.Fatalf("Can't init inotify: %v", err)
 	}
-	defer watcher.Close()
 
-	done := make(chan bool)
+	dirs := []string{
+		"/proc",
+		"/var/log",
+		"/home",
+		"/tmp",
+	}
 
-	go func() {
-		for {
-			select {
-			case event := <-watcher.Events:
-				log.Println("event:", event)
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					log.Println("modified file:", event.Name)
-				}
-			case err := <-watcher.Errors:
-				log.Println("error:", err)
-			}
+	for _, dir := range dirs {
+		if err := in.Watch(dir); err != nil {
+			log.Fatalf("Can't create watcher: %v", err)
 		}
-	}()
-
-	err = watcher.Add("/tmp")
-	if err != nil {
-		log.Fatal(err)
 	}
-	<-done
+
+	log.Printf("Inotify set up: %s\n", in)
+
+	procList := process.NewProcList()
+
+	ticker := time.NewTicker(50 * time.Millisecond).C
+
+	for {
+		select {
+		case <-ticker:
+			refresh(in, procList)
+		case <-ping:
+			log.Printf("PING")
+			refresh(in, procList)
+		}
+	}
 }
 
-func refresh(procList map[int]string) error {
-	proc, err := ioutil.ReadDir("/proc")
-	if err != nil {
-		return fmt.Errorf("opening proc dir: %v", err)
+func refresh(in *inotify.Inotify, pl *process.ProcList) {
+	in.Pause()
+	if err := pl.Refresh(); err != nil {
+		log.Printf("ERROR refreshing process list: %v", err)
 	}
-
-	pids := make([]int, 0)
-
-	for _, f := range proc {
-		if f.IsDir() {
-			name := f.Name()
-			pid, err := strconv.Atoi(name)
-			if err != nil {
-				continue // not a pid
-			}
-			pids = append(pids, pid)
-		}
-	}
-
-	for _, pid := range pids {
-		_, ok := procList[pid]
-		if !ok {
-			cmd, err := getCmd(pid)
-			if err != nil {
-				cmd = "UNKNOWN" // process probably terminated
-			}
-			log.Printf("New process: %5d: %s\n", pid, cmd)
-			procList[pid] = cmd
-		}
-	}
-	return nil
-}
-
-func getCmd(pid int) (string, error) {
-	cmdPath := fmt.Sprintf("/proc/%d/cmdline", pid)
-	cmd, err := ioutil.ReadFile(cmdPath)
-	if err != nil {
-		return "", err
-	}
-	for i := 0; i < len(cmd); i++ {
-		if cmd[i] == 0 {
-			cmd[i] = 32
-		}
-	}
-	return string(cmd), nil
+	time.Sleep(50 * time.Millisecond)
+	in.UnPause()
 }
