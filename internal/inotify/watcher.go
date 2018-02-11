@@ -2,11 +2,15 @@ package inotify
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strconv"
+	"strings"
 
 	"golang.org/x/sys/unix"
 )
 
 const events = unix.IN_ALL_EVENTS
+const MaximumWatchersFile = "/proc/sys/fs/inotify/max_user_watches"
 
 type watcher struct {
 	wd  int
@@ -22,4 +26,19 @@ func newWatcher(fd int, dir string, ping chan struct{}) (*watcher, error) {
 		wd:  wd,
 		dir: dir,
 	}, nil
+}
+
+func WatcherLimit() (int, error) {
+	b, err := ioutil.ReadFile(MaximumWatchersFile)
+	if err != nil {
+		return 0, fmt.Errorf("reading from %s: %v", MaximumWatchersFile, err)
+	}
+
+	s := strings.TrimSpace(string(b))
+	m, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("converting to integer: %v", err)
+	}
+
+	return m, nil
 }
