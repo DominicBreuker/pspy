@@ -5,14 +5,10 @@ import (
 	"io/ioutil"
 	"log"
 	"strconv"
+	"strings"
 )
 
 type ProcList map[int]string
-
-// type Proc struct {
-// 	Cmd  string
-// 	User string
-// }
 
 func NewProcList() *ProcList {
 	pl := make(ProcList)
@@ -20,13 +16,38 @@ func NewProcList() *ProcList {
 }
 
 func (pl ProcList) Refresh() error {
+	pids, err := getPIDs()
+	if err != nil {
+		return err
+	}
+
+	for i := len(pids) - 1; i >= 0; i-- {
+		pid := pids[i]
+		_, ok := pl[pid]
+		if !ok {
+			cmd, err := getCmd(pid)
+			if err != nil {
+				cmd = "???" // process probably terminated
+			}
+			uid, err := getUID(pid)
+			if err != nil {
+				uid = "???"
+			}
+			log.Printf("\x1b[31;1mCMD: UID=%-4s PID=%-6d | %s\x1b[0m\n", uid, pid, cmd)
+			pl[pid] = cmd
+		}
+	}
+
+	return nil
+}
+
+func getPIDs() ([]int, error) {
 	proc, err := ioutil.ReadDir("/proc")
 	if err != nil {
-		return fmt.Errorf("opening proc dir: %v", err)
+		return nil, fmt.Errorf("opening proc dir: %v", err)
 	}
 
 	pids := make([]int, 0)
-
 	for _, f := range proc {
 		if f.IsDir() {
 			name := f.Name()
@@ -37,20 +58,7 @@ func (pl ProcList) Refresh() error {
 			pids = append(pids, pid)
 		}
 	}
-
-	for i := len(pids) - 1; i >= 0; i-- {
-		pid := pids[i]
-		_, ok := pl[pid]
-		if !ok {
-			cmd, err := getCmd(pid)
-			if err != nil {
-				cmd = "UNKNOWN" // process probably terminated
-			}
-			log.Printf("New process: %5d: %s\n", pid, cmd)
-			pl[pid] = cmd
-		}
-	}
-	return nil
+	return pids, nil
 }
 
 func getCmd(pid int) (string, error) {
@@ -65,4 +73,21 @@ func getCmd(pid int) (string, error) {
 		}
 	}
 	return string(cmd), nil
+}
+
+func getUID(pid int) (string, error) {
+	statPath := fmt.Sprintf("/proc/%d/status", pid)
+	stat, err := ioutil.ReadFile(statPath)
+	if err != nil {
+		return "", err
+	}
+	lines := strings.Split(string(stat), "\n")
+	if len(lines) < 9 {
+		return "", fmt.Errorf("no uid information")
+	}
+	uidL := strings.Split(lines[8], "\t")
+	if len(uidL) < 2 {
+		return "", fmt.Errorf("uid line read incomplete")
+	}
+	return uidL[1], nil
 }

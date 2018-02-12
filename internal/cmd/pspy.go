@@ -1,4 +1,4 @@
-package dev
+package cmd
 
 import (
 	"log"
@@ -9,26 +9,18 @@ import (
 	"github.com/dominicbreuker/pspy/internal/walker"
 )
 
-type Process struct {
-	pid   int
-	ppid  int
-	state rune
-	pgrp  int
-	sid   int
-
-	binary string
-}
+const MaxInt = int(^uint(0) >> 1)
 
 func Monitor() {
-	watch()
+	watch([]string{"/tmp"}, nil)
 }
 
-func watch() {
+func watch(rdirs, dirs []string) {
 	maxWatchers, err := inotify.WatcherLimit()
 	if err != nil {
 		log.Printf("Can't get inotify watcher limit...: %v\n", err)
 	}
-	log.Printf("Watcher limit: %d\n", maxWatchers)
+	log.Printf("Inotify watcher limit: %d (/proc/sys/fs/inotify/max_user_watches)\n", maxWatchers)
 
 	ping := make(chan struct{})
 	in, err := inotify.NewInotify(ping)
@@ -37,9 +29,37 @@ func watch() {
 	}
 	defer in.Close()
 
-	dirCh, errCh := walker.Walk("/tmp")
+	for _, dir := range rdirs {
+		addWatchers(dir, MaxInt, in, maxWatchers)
+	}
+	for _, dir := range dirs {
+		addWatchers(dir, 0, in, maxWatchers)
+	}
+
+	log.Printf("Inotify watchers set up: %s\n", in)
+
+	procList := process.NewProcList()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+
+	for {
+		select {
+		case <-ticker.C:
+			refresh(in, procList)
+		case <-ping:
+			refresh(in, procList)
+		}
+	}
+}
+
+func addWatchers(dir string, depth int, in *inotify.Inotify, maxWatchers int) {
+	dirCh, errCh, doneCh := walker.Walk(dir, depth)
 loop:
 	for {
+		if in.NumWatchers() >= maxWatchers {
+			close(doneCh)
+			break loop
+		}
 		select {
 		case dir, ok := <-dirCh:
 			if !ok {
@@ -52,21 +72,6 @@ loop:
 			log.Printf("Error walking filesystem: %v", err)
 		}
 	}
-
-	log.Printf("Inotify set up: %s\n", in)
-
-	procList := process.NewProcList()
-
-	ticker := time.NewTicker(100 * time.Millisecond).C
-
-	for {
-		select {
-		case <-ticker:
-			refresh(in, procList)
-		case <-ping:
-			refresh(in, procList)
-		}
-	}
 }
 
 func refresh(in *inotify.Inotify, pl *process.ProcList) {
@@ -74,6 +79,6 @@ func refresh(in *inotify.Inotify, pl *process.ProcList) {
 	if err := pl.Refresh(); err != nil {
 		log.Printf("ERROR refreshing process list: %v", err)
 	}
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 	in.UnPause()
 }

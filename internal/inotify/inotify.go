@@ -2,9 +2,6 @@ package inotify
 
 import (
 	"fmt"
-	"log"
-	"strings"
-	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
@@ -57,6 +54,10 @@ func (i *Inotify) UnPause() {
 	i.paused = false
 }
 
+func (i *Inotify) NumWatchers() int {
+	return len(i.watchers)
+}
+
 func (i *Inotify) String() string {
 	if len(i.watchers) < 20 {
 		dirs := make([]string, 0)
@@ -75,9 +76,9 @@ type bufRead struct {
 }
 
 func watch(i *Inotify) {
-	buf := make([]byte, 20*unix.SizeofInotifyEvent)
+	buf := make([]byte, 5*unix.SizeofInotifyEvent)
 	buffers := make(chan bufRead)
-	go verboseWatcher(i, buffers)
+	go eventLogger(i, buffers)
 	for {
 		n, _ := unix.Read(i.fd, buf)
 		if !i.paused {
@@ -88,74 +89,4 @@ func watch(i *Inotify) {
 			buf: buf,
 		}
 	}
-}
-
-func verboseWatcher(i *Inotify, buffers chan bufRead) {
-	for bf := range buffers {
-		n := bf.n
-		buf := bf.buf
-
-		if n < unix.SizeofInotifyEvent {
-			if n == 0 {
-				// If EOF is received. This should really never happen.
-				panic(fmt.Sprintf("No bytes read from fd"))
-			} else if n < 0 {
-				// If an error occurred while reading.
-				log.Printf("ERROR: reading from inotify: %d", n)
-			} else {
-				// Read was too short.
-				log.Printf("ERROR: Short read")
-			}
-			continue
-		}
-
-		var offset uint32
-		for offset <= uint32(n-unix.SizeofInotifyEvent) {
-			raw := (*unix.InotifyEvent)(unsafe.Pointer(&buf[offset]))
-
-			mask := uint32(raw.Mask)
-			nameLen := uint32(raw.Len)
-
-			name := i.watchers[int(raw.Wd)].dir
-			if nameLen > 0 {
-				bytes := (*[unix.PathMax]byte)(unsafe.Pointer(&buf[offset+unix.SizeofInotifyEvent]))
-				if uint32(len(bytes)) > nameLen {
-					name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
-				}
-			}
-			ev := newEvent(name, mask)
-			log.Printf("### %+v", ev)
-
-			offset += unix.SizeofInotifyEvent + nameLen
-		}
-	}
-}
-
-type Event struct {
-	name string
-	op   string
-}
-
-func (e Event) String() string {
-	return fmt.Sprintf("%10s | %s", e.op, e.name)
-}
-
-func newEvent(name string, mask uint32) Event {
-	e := Event{name: name}
-	if mask&unix.IN_CREATE == unix.IN_CREATE || mask&unix.IN_MOVED_TO == unix.IN_MOVED_TO {
-		e.op = "CREATE"
-	}
-	if mask&unix.IN_DELETE_SELF == unix.IN_DELETE_SELF || mask&unix.IN_DELETE == unix.IN_DELETE {
-		e.op = "REMOVE"
-	}
-	if mask&unix.IN_MODIFY == unix.IN_MODIFY {
-		e.op = "WRITE"
-	}
-	if mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF || mask&unix.IN_MOVED_FROM == unix.IN_MOVED_FROM {
-		e.op = "RENAME"
-	}
-	if mask&unix.IN_ATTRIB == unix.IN_ATTRIB {
-		e.op = "CHMOD"
-	}
-	return e
 }

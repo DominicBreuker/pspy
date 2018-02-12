@@ -1,7 +1,7 @@
 package main
 
-import "github.com/dominicbreuker/pspy/internal/dev"
+import "github.com/dominicbreuker/pspy/internal/cmd"
 
 func main() {
-	dev.Monitor()
+	cmd.Monitor()
 }
