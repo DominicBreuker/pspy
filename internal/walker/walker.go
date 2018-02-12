@@ -3,45 +3,40 @@ package walker
 import (
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 )
 
-func Walk(root string) (dirCh chan string, errCh chan error) {
+func Walk(root string, depth int) (dirCh chan string, errCh chan error, doneCh chan struct{}) {
 	dirCh = make(chan string)
 	errCh = make(chan error)
-	dirs := make([]string, 1)
-	dirs[0] = root
+	doneCh = make(chan struct{})
 
 	go func() {
-		dirCh <- root
-	}()
-	go func() {
-		for {
-			if len(dirs) == 0 {
-				break
-			}
-			dirs = descent(dirs, dirCh, errCh)
-		}
+		descent(root, depth-1, dirCh, errCh, doneCh)
 		close(dirCh)
-		close(errCh)
 	}()
-	return dirCh, errCh
+	return dirCh, errCh, doneCh
 }
 
-func descent(dirs []string, dirCh chan string, errCh chan error) []string {
-	next := make([]string, 0)
-	for _, dir := range dirs {
-		ls, err := ioutil.ReadDir(dir)
-		if err != nil {
-			errCh <- fmt.Errorf("opening dir %s: %v", dir, err)
-		}
+func descent(dir string, depth int, dirCh chan string, errCh chan error, doneCh chan struct{}) {
+	select {
+	case dirCh <- dir:
+	case <-doneCh:
+		return
+	}
+	if depth < 0 {
+		return
+	}
 
-		for _, e := range ls {
-			if e.IsDir() {
-				newDir := dir + e.Name() + "/"
-				dirCh <- newDir
-				next = append(next, newDir)
-			}
+	ls, err := ioutil.ReadDir(dir)
+	if err != nil {
+		errCh <- fmt.Errorf("opening dir %s: %v", dir, err)
+	}
+
+	for _, e := range ls {
+		if e.IsDir() {
+			newDir := filepath.Join(dir, e.Name())
+			descent(newDir, depth-1, dirCh, errCh, doneCh)
 		}
 	}
-	return next
 }
