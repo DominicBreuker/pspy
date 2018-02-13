@@ -30,6 +30,10 @@ func NewInotify(ping chan struct{}) (*Inotify, error) {
 	return i, nil
 }
 
+func (i *Inotify) Start() {
+	go watch(i)
+}
+
 func (i *Inotify) Watch(dir string) error {
 	w, err := newWatcher(i.fd, dir, i.ping)
 	if err != nil {
