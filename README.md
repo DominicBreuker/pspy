@@ -33,7 +33,7 @@ This is an example from the machine Shrek by [Hack The Box](https://www.hacktheb
 In this CTF challenge, the task is to exploit a hidden cron job that's changing ownership of all files in a folder.
 With pspy, the cron job is easy to find and analyse:
 
-![animated demo gif](images/example.gif)
+![animated demo gif](images/demo.gif)
 
 ## How it works
 
