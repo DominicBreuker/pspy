@@ -1,4 +1,6 @@
-# pspy - monitor Linux processes without root permissions
+<img src="images/logo.svg" align="left" />
+
+# pspy - process monitoring without root
 
 pspy is a command line tool allowing you to snoop on Linux processes without being root.
 It can help you to find and analyse cron jobs or other background processes that would otherwise be hidden from you (e.g., a cron job in `/var/spool/cron/root`).
@@ -9,6 +11,11 @@ Inotify events are used as a trigger for `/proc` scanning to not miss short-live
 
 Get the tool onto the machine you want to inspect.
 You can choose between the 32 and 64 bit version.
+Files are in the `/bin` folder of this repository.
+- 32 bit version: [download](bin/pspy32)
+- 64 bit version: [download](bin/pspy64)
+
+All files are statically compiled and should run without any libraries.
 It will only work on Linux.
 No other OS is supported as the project relies on Linux kernel features.
 
@@ -61,3 +68,7 @@ In general, the longer the processes run, the bigger the chance of catching them
 Besides using the events, pspy will also scan `/proc` every 100ms, just to be sure.
 My initial experiments suggest the CPU usage is quite low for this value.
 Making the interval configurable is on the roadmap.
+
+# Misc
+
+Logo: "By Creative Tail [CC BY 4.0 (http://creativecommons.org/licenses/by/4.0)], via Wikimedia Commons"
