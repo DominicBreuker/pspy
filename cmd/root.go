@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -39,18 +40,29 @@ var rootCmd = &cobra.Command{
 
 var logPS, logFS bool
 var rDirs, dirs []string
+var defaultRDirs = []string{
+	"/usr",
+	"/tmp",
+	"/etc",
+	"/home",
+	"/var",
+	"/opt",
+}
+var defaultDirs = []string{}
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&logPS, "procevents", "p", true, "print new processes to stdout")
-	rootCmd.PersistentFlags().BoolVarP(&logFS, "fsevents", "f", true, "print file system events to stdout")
-	rootCmd.PersistentFlags().StringArrayVarP(&rDirs, "recursive_dirs", "r", []string{"/tmp"}, "watch these dirs recursively")
-	rootCmd.PersistentFlags().StringArrayVarP(&dirs, "dirs", "d", []string{}, "watch these dirs")
+	rootCmd.PersistentFlags().BoolVarP(&logFS, "fsevents", "f", false, "print file system events to stdout")
+	rootCmd.PersistentFlags().StringArrayVarP(&rDirs, "recursive_dirs", "r", defaultRDirs, "watch these dirs recursively")
+	rootCmd.PersistentFlags().StringArrayVarP(&dirs, "dirs", "d", defaultDirs, "watch these dirs")
+
+	log.SetOutput(os.Stdout)
 }
 
 func root(cmd *cobra.Command, args []string) {
 	fmt.Printf("Watching recursively    : %+v (%d)\n", rDirs, len(rDirs))
 	fmt.Printf("Watching non-recursively: %+v (%d)\n", dirs, len(dirs))
-	fmt.Printf("Printing: processes=%t file-system events:%t\n", logPS, logFS)
+	fmt.Printf("Printing: processes=%t file-system events=%t\n", logPS, logFS)
 	pspy.Watch(rDirs, dirs, logPS, logFS)
 }
 

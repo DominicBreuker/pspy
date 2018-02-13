@@ -1,7 +1,9 @@
 package pspy
 
 import (
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/dominicbreuker/pspy/internal/inotify"
@@ -23,7 +25,7 @@ func Watch(rdirs, dirs []string, logPS, logFS bool) {
 	log.Printf("Inotify watcher limit: %d (/proc/sys/fs/inotify/max_user_watches)\n", maxWatchers)
 
 	ping := make(chan struct{})
-	in, err := inotify.NewInotify(ping)
+	in, err := inotify.NewInotify(ping, logFS)
 	if err != nil {
 		log.Fatalf("Can't init inotify: %v", err)
 	}
@@ -45,9 +47,9 @@ func Watch(rdirs, dirs []string, logPS, logFS bool) {
 	for {
 		select {
 		case <-ticker.C:
-			refresh(in, procList)
+			refresh(in, procList, logPS)
 		case <-ping:
-			refresh(in, procList)
+			refresh(in, procList, logPS)
 		}
 	}
 }
@@ -66,17 +68,17 @@ loop:
 				break loop
 			}
 			if err := in.Watch(dir); err != nil {
-				log.Printf("Can't create watcher: %v", err)
+				fmt.Fprintf(os.Stderr, "Can't create watcher: %v", err)
 			}
 		case err := <-errCh:
-			log.Printf("Error walking filesystem: %v", err)
+			fmt.Fprintf(os.Stderr, "Error walking filesystem: %v", err)
 		}
 	}
 }
 
-func refresh(in *inotify.Inotify, pl *process.ProcList) {
+func refresh(in *inotify.Inotify, pl *process.ProcList, print bool) {
 	in.Pause()
-	if err := pl.Refresh(); err != nil {
+	if err := pl.Refresh(print); err != nil {
 		log.Printf("ERROR refreshing process list: %v", err)
 	}
 	time.Sleep(5 * time.Millisecond)

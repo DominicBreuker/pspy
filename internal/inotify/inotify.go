@@ -13,7 +13,7 @@ type Inotify struct {
 	paused   bool
 }
 
-func NewInotify(ping chan struct{}) (*Inotify, error) {
+func NewInotify(ping chan struct{}, print bool) (*Inotify, error) {
 	fd, errno := unix.InotifyInit1(unix.IN_CLOEXEC)
 	if fd == -1 {
 		return nil, fmt.Errorf("Can't init inotify: %d", errno)
@@ -25,13 +25,9 @@ func NewInotify(ping chan struct{}) (*Inotify, error) {
 		ping:     ping,
 		paused:   false,
 	}
-	go watch(i)
+	go watch(i, print)
 
 	return i, nil
-}
-
-func (i *Inotify) Start() {
-	go watch(i)
 }
 
 func (i *Inotify) Watch(dir string) error {
@@ -79,10 +75,10 @@ type bufRead struct {
 	buf []byte
 }
 
-func watch(i *Inotify) {
+func watch(i *Inotify, print bool) {
 	buf := make([]byte, 5*unix.SizeofInotifyEvent)
 	buffers := make(chan bufRead)
-	go eventLogger(i, buffers)
+	go eventLogger(i, buffers, print)
 	for {
 		n, _ := unix.Read(i.fd, buf)
 		if !i.paused {
