@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -55,7 +56,13 @@ func newEvent(name string, mask uint32) Event {
 	return e
 }
 
-func eventLogger(i *Inotify, buffers chan bufRead) {
+func eventLogger(i *Inotify, buffers chan bufRead, print bool) {
+	// enable printing only after delay since setting up watchers causes flood of events
+	printEnabled := false
+	go func() {
+		<-time.After(1 * time.Second)
+		printEnabled = print
+	}()
 	for bf := range buffers {
 		n := bf.n
 		buf := bf.buf
@@ -82,7 +89,9 @@ func eventLogger(i *Inotify, buffers chan bufRead) {
 			}
 
 			ev := newEvent(name, sys.Mask)
-			log.Printf("\x1b[32;1mFS: %+v\x1b[0m", ev)
+			if printEnabled {
+				log.Printf("\x1b[32;1mFS: %+v\x1b[0m", ev)
+			}
 		}
 	}
 }

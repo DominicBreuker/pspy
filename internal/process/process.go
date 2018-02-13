@@ -15,7 +15,7 @@ func NewProcList() *ProcList {
 	return &pl
 }
 
-func (pl ProcList) Refresh() error {
+func (pl ProcList) Refresh(print bool) error {
 	pids, err := getPIDs()
 	if err != nil {
 		return err
@@ -33,7 +33,9 @@ func (pl ProcList) Refresh() error {
 			if err != nil {
 				uid = "???"
 			}
-			log.Printf("\x1b[31;1mCMD: UID=%-4s PID=%-6d | %s\x1b[0m\n", uid, pid, cmd)
+			if print {
+				log.Printf("\x1b[31;1mCMD: UID=%-4s PID=%-6d | %s\x1b[0m\n", uid, pid, cmd)
+			}
 			pl[pid] = cmd
 		}
 	}
