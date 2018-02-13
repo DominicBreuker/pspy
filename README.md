@@ -71,4 +71,4 @@ Making the interval configurable is on the roadmap.
 
 # Misc
 
-Logo: "By Creative Tail [CC BY 4.0 (http://creativecommons.org/licenses/by/4.0)], via Wikimedia Commons"
+Logo: "By Creative Tail [CC BY 4.0 (http://creativecommons.org/licenses/by/4.0)], via Wikimedia Commons" ([link](https://commons.wikimedia.org/wiki/File%3ACreative-Tail-People-spy.svg))
