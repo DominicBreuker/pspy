@@ -68,10 +68,10 @@ loop:
 				break loop
 			}
 			if err := in.Watch(dir); err != nil {
-				fmt.Fprintf(os.Stderr, "Can't create watcher: %v", err)
+				fmt.Fprintf(os.Stderr, "Can't create watcher: %v\n", err)
 			}
 		case err := <-errCh:
-			fmt.Fprintf(os.Stderr, "Error walking filesystem: %v", err)
+			fmt.Fprintf(os.Stderr, "Error walking filesystem: %v\n", err)
 		}
 	}
 }
