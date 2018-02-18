@@ -43,7 +43,7 @@ pspy64 -p=false -f
 
 To see the tool in action, just clone the repo and run `make example` (Docker needed).
 The example starts a debian container in which a cron job changes a user password every minute.
-After starting cron, it runs pspy in foreground.
+After starting cron, it runs pspy in foreground, as user myuser, not root.
 You should see output similar to this:
 
 ```console
