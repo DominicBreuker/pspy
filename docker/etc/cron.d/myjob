@@ -1,1 +1,0 @@
-* * * * * root echo 'this is some text' >> /tmp/myjob.log
