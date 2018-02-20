@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dominicbreuker/pspy/internal/config"
+	"github.com/dominicbreuker/pspy/internal/logger"
 	"github.com/dominicbreuker/pspy/internal/pspy"
 	"github.com/spf13/cobra"
 )
@@ -63,7 +65,15 @@ func root(cmd *cobra.Command, args []string) {
 	fmt.Printf("Watching recursively    : %+v (%d)\n", rDirs, len(rDirs))
 	fmt.Printf("Watching non-recursively: %+v (%d)\n", dirs, len(dirs))
 	fmt.Printf("Printing: processes=%t file-system events=%t\n", logPS, logFS)
-	pspy.Watch(rDirs, dirs, logPS, logFS)
+	cfg := config.Config{
+		RDirs: rDirs,
+		Dirs:  dirs,
+		LogPS: logPS,
+		LogFS: logFS,
+	}
+	logger := logger.NewLogger()
+	pspy.Start(cfg, logger)
+	// pspy.Watch(rDirs, dirs, logPS, logFS)
 }
 
 func Execute() {
