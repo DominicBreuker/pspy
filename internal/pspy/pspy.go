@@ -4,18 +4,61 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/dominicbreuker/pspy/internal/config"
 	"github.com/dominicbreuker/pspy/internal/inotify"
+	"github.com/dominicbreuker/pspy/internal/logger"
 	"github.com/dominicbreuker/pspy/internal/process"
 	"github.com/dominicbreuker/pspy/internal/walker"
 )
 
-const MaxInt = int(^uint(0) >> 1)
+func Start(cfg config.Config, logger *logger.Logger) {
+	fmt.Printf("Config: %+v\n", cfg)
 
-func Monitor() {
-	Watch([]string{"/tmp"}, nil, true, true)
+	triggerCh, fsEventCh, err := setupInotify(cfg.RDirs, cfg.Dirs)
+	if err != nil {
+		logger.Errorf("Can't set up inotify watchers: %v\n", err)
+	}
+	psEventCh, err := setupProcfsScanner(triggerCh, 100*time.Millisecond)
+	if err != nil {
+		logger.Errorf("Can't set up procfs scanner: %+v\n", err)
+	}
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	for {
+		select {
+		case se := <-sigCh:
+			logger.Infof("Exiting program... (%s)\n", se)
+			os.Exit(0)
+		case fe := <-fsEventCh:
+			if cfg.LogFS {
+				logger.Eventf("FS: %+v\n", fe)
+			}
+		case pe := <-psEventCh:
+			if cfg.LogPS {
+				logger.Eventf("CMD: %+v\n", pe)
+			}
+		}
+	}
 }
+
+func setupInotify(rdirs, dirs []string) (chan struct{}, chan string, error) {
+	triggerCh := make(chan struct{})
+	fsEventCh := make(chan string)
+	return triggerCh, fsEventCh, nil
+}
+
+func setupProcfsScanner(triggerCh chan struct{}, interval time.Duration) (chan string, error) {
+	psEventCh := make(chan string)
+	return psEventCh, nil
+}
+
+const MaxInt = int(^uint(0) >> 1)
 
 func Watch(rdirs, dirs []string, logPS, logFS bool) {
 	maxWatchers, err := inotify.WatcherLimit()
