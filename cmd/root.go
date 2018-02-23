@@ -4,10 +4,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/dominicbreuker/pspy/internal/config"
-	"github.com/dominicbreuker/pspy/internal/logger"
+	"github.com/dominicbreuker/pspy/internal/inotify"
+	"github.com/dominicbreuker/pspy/internal/logging"
+	"github.com/dominicbreuker/pspy/internal/process"
 	"github.com/dominicbreuker/pspy/internal/pspy"
 	"github.com/spf13/cobra"
 )
@@ -71,9 +75,19 @@ func root(cmd *cobra.Command, args []string) {
 		LogPS: logPS,
 		LogFS: logFS,
 	}
-	logger := logger.NewLogger()
-	pspy.Start(cfg, logger)
-	// pspy.Watch(rDirs, dirs, logPS, logFS)
+	logger := logging.NewLogger()
+	iw := inotify.NewInotifyWatcher()
+	pscan := process.NewProcfsScanner()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	exit, err := pspy.Start(cfg, logger, iw, pscan, sigCh)
+	if err != nil {
+		os.Exit(1)
+	}
+	<-exit
+	os.Exit(0)
 }
 
 func Execute() {

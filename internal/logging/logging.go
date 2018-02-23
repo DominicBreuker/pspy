@@ -1,18 +1,16 @@
-package logger
+package logging
 
 import (
 	"log"
 	"os"
 )
 
-// Logger is the logger used to print to the command line
 type Logger struct {
 	infoLogger  *log.Logger
 	errorLogger *log.Logger
 	eventLogger *log.Logger
 }
 
-// NewLogger creates a new logger instance
 func NewLogger() *Logger {
 	return &Logger{
 		infoLogger:  log.New(os.Stdout, "", 0),

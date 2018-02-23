@@ -6,7 +6,19 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 )
+
+type ProcfsScanner struct{}
+
+func NewProcfsScanner() *ProcfsScanner {
+	return &ProcfsScanner{}
+}
+
+func (p *ProcfsScanner) Setup(triggerCh chan struct{}, interval time.Duration) (chan string, error) {
+	psEventCh := make(chan string)
+	return psEventCh, nil
+}
 
 type ProcList map[int]string
 

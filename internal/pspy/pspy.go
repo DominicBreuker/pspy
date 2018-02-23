@@ -1,61 +1,66 @@
 package pspy
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/dominicbreuker/pspy/internal/config"
 	"github.com/dominicbreuker/pspy/internal/inotify"
-	"github.com/dominicbreuker/pspy/internal/logger"
 	"github.com/dominicbreuker/pspy/internal/process"
 	"github.com/dominicbreuker/pspy/internal/walker"
 )
 
-func Start(cfg config.Config, logger *logger.Logger) {
-	fmt.Printf("Config: %+v\n", cfg)
+type Logger interface {
+	Infof(format string, v ...interface{})
+	Errorf(format string, v ...interface{})
+	Eventf(format string, v ...interface{})
+}
 
-	triggerCh, fsEventCh, err := setupInotify(cfg.RDirs, cfg.Dirs)
+type InotifyWatcher interface {
+	Setup(rdirs, dirs []string) (chan struct{}, chan string, error)
+}
+
+type ProcfsScanner interface {
+	Setup(triggerCh chan struct{}, interval time.Duration) (chan string, error)
+}
+
+func Start(cfg config.Config, logger Logger, inotify InotifyWatcher, pscan ProcfsScanner, sigCh chan os.Signal) (chan struct{}, error) {
+	logger.Infof("Config: %+v\n", cfg)
+
+	triggerCh, fsEventCh, err := inotify.Setup(cfg.RDirs, cfg.Dirs)
 	if err != nil {
 		logger.Errorf("Can't set up inotify watchers: %v\n", err)
+		return nil, errors.New("inotify error")
 	}
-	psEventCh, err := setupProcfsScanner(triggerCh, 100*time.Millisecond)
+	psEventCh, err := pscan.Setup(triggerCh, 100*time.Millisecond)
 	if err != nil {
 		logger.Errorf("Can't set up procfs scanner: %+v\n", err)
+		return nil, errors.New("procfs scanner error")
 	}
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	exit := make(chan struct{})
 
-	for {
-		select {
-		case se := <-sigCh:
-			logger.Infof("Exiting program... (%s)\n", se)
-			os.Exit(0)
-		case fe := <-fsEventCh:
-			if cfg.LogFS {
-				logger.Eventf("FS: %+v\n", fe)
-			}
-		case pe := <-psEventCh:
-			if cfg.LogPS {
-				logger.Eventf("CMD: %+v\n", pe)
+	go func() {
+		for {
+			select {
+			case se := <-sigCh:
+				logger.Infof("Exiting program... (%s)\n", se)
+				exit <- struct{}{}
+			case fe := <-fsEventCh:
+				if cfg.LogFS {
+					logger.Eventf("FS: %+v\n", fe)
+				}
+			case pe := <-psEventCh:
+				if cfg.LogPS {
+					logger.Eventf("CMD: %+v\n", pe)
+				}
 			}
 		}
-	}
-}
-
-func setupInotify(rdirs, dirs []string) (chan struct{}, chan string, error) {
-	triggerCh := make(chan struct{})
-	fsEventCh := make(chan string)
-	return triggerCh, fsEventCh, nil
-}
-
-func setupProcfsScanner(triggerCh chan struct{}, interval time.Duration) (chan string, error) {
-	psEventCh := make(chan string)
-	return psEventCh, nil
+	}()
+	return exit, nil
 }
 
 const MaxInt = int(^uint(0) >> 1)
