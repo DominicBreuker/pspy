@@ -6,6 +6,18 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+type InotifyWatcher struct{}
+
+func NewInotifyWatcher() *InotifyWatcher {
+	return &InotifyWatcher{}
+}
+
+func (i *InotifyWatcher) Setup(rdirs, dirs []string) (chan struct{}, chan string, error) {
+	triggerCh := make(chan struct{})
+	fsEventCh := make(chan string)
+	return triggerCh, fsEventCh, nil
+}
+
 type Inotify struct {
 	fd       int
 	watchers map[int]*watcher
