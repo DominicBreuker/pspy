@@ -92,6 +92,7 @@ type mockInotifyWatcher struct {
 	triggerCh chan struct{}
 	fsEventCh chan string
 	setupErr  error
+	closed    bool
 }
 
 func newMockInotifyWatcher(setupErr error) *mockInotifyWatcher {
@@ -99,14 +100,19 @@ func newMockInotifyWatcher(setupErr error) *mockInotifyWatcher {
 		triggerCh: make(chan struct{}),
 		fsEventCh: make(chan string),
 		setupErr:  setupErr,
+		closed:    false,
 	}
 }
 
-func (i *mockInotifyWatcher) Setup(rdirs, dirs []string) (chan struct{}, chan string, error) {
+func (i *mockInotifyWatcher) Setup(rdirs, dirs []string, errCh chan error) (chan struct{}, chan string, error) {
 	if i.setupErr != nil {
 		return nil, nil, i.setupErr
 	}
 	return i.triggerCh, i.fsEventCh, nil
+}
+
+func (i mockInotifyWatcher) Close() {
+	i.closed = true
 }
 
 // ProcfsScanner

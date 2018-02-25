@@ -17,7 +17,7 @@ type watcher struct {
 	dir string
 }
 
-func newWatcher(fd int, dir string, ping chan struct{}) (*watcher, error) {
+func newWatcher(fd int, dir string) (*watcher, error) {
 	wd, errno := unix.InotifyAddWatch(fd, dir, events)
 	if wd == -1 {
 		return nil, fmt.Errorf("adding watcher on %s: %d", dir, errno)
@@ -28,7 +28,7 @@ func newWatcher(fd int, dir string, ping chan struct{}) (*watcher, error) {
 	}, nil
 }
 
-func WatcherLimit() (int, error) {
+func getLimit() (int, error) {
 	b, err := ioutil.ReadFile(MaximumWatchersFile)
 	if err != nil {
 		return 0, fmt.Errorf("reading from %s: %v", MaximumWatchersFile, err)

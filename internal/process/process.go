@@ -17,6 +17,11 @@ func NewProcfsScanner() *ProcfsScanner {
 
 func (p *ProcfsScanner) Setup(triggerCh chan struct{}, interval time.Duration) (chan string, error) {
 	psEventCh := make(chan string)
+	go func() {
+		for {
+			<-triggerCh
+		}
+	}()
 	return psEventCh, nil
 }
 

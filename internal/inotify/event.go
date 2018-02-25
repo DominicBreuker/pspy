@@ -3,9 +3,7 @@ package inotify
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"strconv"
-	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -37,38 +35,11 @@ var InotifyEvents = map[uint32]string{
 	(unix.IN_OPEN | unix.IN_ISDIR):          "OPEN DIR",
 }
 
-type Event struct {
-	name string
-	op   string
-}
-
-func (e Event) String() string {
-	return fmt.Sprintf("%20s | %s", e.op, e.name)
-}
-
-func newEvent(name string, mask uint32) Event {
-	e := Event{name: name}
-	op, ok := InotifyEvents[mask]
-	if !ok {
-		op = strconv.FormatInt(int64(mask), 2)
-	}
-	e.op = op
-	return e
-}
-
-func eventLogger(i *Inotify, buffers chan bufRead, print bool) {
-	// enable printing only after delay since setting up watchers causes flood of events
-	printEnabled := false
-	go func() {
-		<-time.After(1 * time.Second)
-		printEnabled = print
-	}()
-	for bf := range buffers {
-		n := bf.n
-		buf := bf.buf
-
+func parseEvents(i *Inotify, dataCh chan []byte, eventCh chan string, errCh chan error) {
+	for buf := range dataCh {
+		n := len(buf)
 		if n < unix.SizeofInotifyEvent {
-			// incomplete or erroneous read
+			errCh <- fmt.Errorf("Inotify event parser: incomplete read: n=%d", n)
 			continue
 		}
 
@@ -80,6 +51,7 @@ func eventLogger(i *Inotify, buffers chan bufRead, print bool) {
 
 			watcher, ok := i.watchers[int(sys.Wd)]
 			if !ok {
+				errCh <- fmt.Errorf("Inotify event parser: unknown watcher ID: %d", sys.Wd)
 				continue
 			}
 			name = watcher.dir + "/"
@@ -88,10 +60,15 @@ func eventLogger(i *Inotify, buffers chan bufRead, print bool) {
 				ptr += sys.Len
 			}
 
-			ev := newEvent(name, sys.Mask)
-			if printEnabled {
-				log.Printf("\x1b[32;1mFS: %+v\x1b[0m", ev)
-			}
+			eventCh <- formatEvent(name, sys.Mask)
 		}
 	}
+}
+
+func formatEvent(name string, mask uint32) string {
+	op, ok := InotifyEvents[mask]
+	if !ok {
+		op = strconv.FormatInt(int64(mask), 2)
+	}
+	return fmt.Sprintf("%20s | %s", op, name)
 }
