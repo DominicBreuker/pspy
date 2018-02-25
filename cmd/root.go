@@ -66,20 +66,23 @@ func init() {
 }
 
 func root(cmd *cobra.Command, args []string) {
-	fmt.Printf("Watching recursively    : %+v (%d)\n", rDirs, len(rDirs))
-	fmt.Printf("Watching non-recursively: %+v (%d)\n", dirs, len(dirs))
-	fmt.Printf("Printing: processes=%t file-system events=%t\n", logPS, logFS)
+	logger := logging.NewLogger()
+
 	cfg := config.Config{
 		RDirs: rDirs,
 		Dirs:  dirs,
 		LogPS: logPS,
 		LogFS: logFS,
 	}
-	logger := logging.NewLogger()
-	iw := inotify.NewInotifyWatcher()
+	iw, err := inotify.NewInotifyWatcher()
+	if err != nil {
+		logger.Errorf("Can't initialize inotify: %v", err)
+		os.Exit(1)
+	}
+	defer iw.Close()
 	pscan := process.NewProcfsScanner()
 
-	sigCh := make(chan os.Signal, 1)
+	sigCh := make(chan os.Signal)
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	exit, err := pspy.Start(cfg, logger, iw, pscan, sigCh)
