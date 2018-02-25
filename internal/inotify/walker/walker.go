@@ -3,22 +3,32 @@ package walker
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 )
 
-func Walk(root string, depth int) (dirCh chan string, errCh chan error, doneCh chan struct{}) {
+const maxInt = int(^uint(0) >> 1)
+
+func Walk(root string, depth int, errCh chan error) (dirCh chan string, doneCh chan struct{}) {
+	if depth < 0 {
+		depth = maxInt
+	}
 	dirCh = make(chan string)
-	errCh = make(chan error)
 	doneCh = make(chan struct{})
 
 	go func() {
 		descent(root, depth-1, dirCh, errCh, doneCh)
 		close(dirCh)
 	}()
-	return dirCh, errCh, doneCh
+	return dirCh, doneCh
 }
 
 func descent(dir string, depth int, dirCh chan string, errCh chan error, doneCh chan struct{}) {
+	_, err := os.Stat(dir)
+	if err != nil {
+		errCh <- fmt.Errorf("Can't walk directory %s: %v", dir, err)
+		return
+	}
 	select {
 	case dirCh <- dir:
 	case <-doneCh:
