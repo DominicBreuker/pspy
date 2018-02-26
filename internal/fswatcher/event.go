@@ -1,4 +1,4 @@
-package inotify
+package fswatcher
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"unsafe"
 
+	"github.com/dominicbreuker/pspy/internal/fswatcher/inotify"
 	"golang.org/x/sys/unix"
 )
 
@@ -35,7 +36,7 @@ var InotifyEvents = map[uint32]string{
 	(unix.IN_OPEN | unix.IN_ISDIR):          "OPEN DIR",
 }
 
-func parseEvents(i *Inotify, dataCh chan []byte, eventCh chan string, errCh chan error) {
+func parseEvents(i *inotify.Inotify, dataCh chan []byte, eventCh chan string, errCh chan error) {
 	for buf := range dataCh {
 		n := len(buf)
 		if n < unix.SizeofInotifyEvent {
@@ -49,12 +50,12 @@ func parseEvents(i *Inotify, dataCh chan []byte, eventCh chan string, errCh chan
 			sys := (*unix.InotifyEvent)(unsafe.Pointer(&buf[ptr]))
 			ptr += unix.SizeofInotifyEvent
 
-			watcher, ok := i.watchers[int(sys.Wd)]
+			watcher, ok := i.Watchers[int(sys.Wd)]
 			if !ok {
 				errCh <- fmt.Errorf("Inotify event parser: unknown watcher ID: %d", sys.Wd)
 				continue
 			}
-			name = watcher.dir + "/"
+			name = watcher.Dir + "/"
 			if sys.Len > 0 && len(buf) >= int(ptr+sys.Len) {
 				name += string(bytes.TrimRight(buf[ptr:ptr+sys.Len], "\x00"))
 				ptr += sys.Len
