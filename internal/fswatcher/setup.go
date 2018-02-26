@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/dominicbreuker/pspy/internal/fswatcher/inotify"
-	isys "github.com/dominicbreuker/pspy/internal/fswatcher/inotify/sys"
 	"github.com/dominicbreuker/pspy/internal/fswatcher/walker"
 )
 
@@ -17,7 +16,7 @@ func (iw *InotifyWatcher) Close() {
 }
 
 func NewInotifyWatcher() (*InotifyWatcher, error) {
-	i, err := inotify.NewInotify(&isys.InotifySyscallsUNIX{})
+	i, err := inotify.NewInotify()
 	if err != nil {
 		return nil, fmt.Errorf("setting up inotify: %v", err)
 	}
@@ -27,7 +26,7 @@ func NewInotifyWatcher() (*InotifyWatcher, error) {
 }
 
 func (iw *InotifyWatcher) Setup(rdirs, dirs []string, errCh chan error) (chan struct{}, chan string, error) {
-	maxWatchers, err := getLimit()
+	maxWatchers, err := inotify.GetMaxWatchers()
 	if err != nil {
 		errCh <- fmt.Errorf("Can't get inotify watcher limit...: %v\n", err)
 		maxWatchers = -1

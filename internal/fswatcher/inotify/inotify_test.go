@@ -1,49 +1,46 @@
 package inotify
 
 import (
-	"errors"
+	"io/ioutil"
+	"os"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
-func TestNewInotify(t *testing.T) {
-	mis := &MockInotifySyscalls{fd: 1}
+func TestInotify(t *testing.T) {
+	i, err := NewInotify()
+	expectNoError(t, err)
 
-	i, err := NewInotify(mis)
+	err = i.Watch("testdata/folder")
+	expectNoError(t, err)
+
+	err = ioutil.WriteFile("testdata/folder/f1", []byte("file content"), 0644)
+	expectNoError(t, err)
+	defer os.Remove("testdata/folder/f1")
+
+	buf := make([]byte, 5*unix.SizeofInotifyEvent)
+	_, err = i.Read(buf)
+	expectNoError(t, err)
+
+	e, offset, err := i.ParseNextEvent(buf[0:])
+	expectNoError(t, err)
+	if e.Name != "testdata/folder/f1" {
+		t.Fatalf("Wrong event name: %s", e.Name)
+	}
+	if e.Op != "CREATE" {
+		t.Fatalf("Wrong op: %s", e.Op)
+	}
+	if offset != 32 {
+		t.Fatalf("Wrong offset: %d", offset)
+	}
+
+	err = i.Close()
+	expectNoError(t, err)
+}
+
+func expectNoError(t *testing.T, err error) {
 	if err != nil {
-		t.Fatalf("Unexpected error")
+		t.Fatalf("Unexpected error: %v", err)
 	}
-	if i.FD != mis.fd {
-		t.Fatalf("Did not set FD of inotify object")
-	}
-}
-
-func TestNewInotifyError(t *testing.T) {
-	mis := &MockInotifySyscalls{fd: -1}
-
-	_, err := NewInotify(mis)
-	if err == nil || err.Error() != "initializing inotify: syscall error" {
-		t.Fatalf("Expected syscall error but did not get: %v", err)
-	}
-}
-
-// mock
-
-type MockInotifySyscalls struct {
-	fd int
-}
-
-func (mis *MockInotifySyscalls) Init() (int, error) {
-	if mis.fd >= 0 {
-		return mis.fd, nil
-	} else {
-		return -1, errors.New("syscall error")
-	}
-}
-
-func (mis *MockInotifySyscalls) AddWatch(fd int, dir string) (int, error) {
-	return 2, nil
-}
-
-func (mis *MockInotifySyscalls) Close(fd int) error {
-	return nil
 }
