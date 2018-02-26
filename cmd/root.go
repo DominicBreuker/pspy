@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/dominicbreuker/pspy/internal/config"
-	"github.com/dominicbreuker/pspy/internal/inotify"
+	"github.com/dominicbreuker/pspy/internal/fswatcher"
 	"github.com/dominicbreuker/pspy/internal/logging"
 	"github.com/dominicbreuker/pspy/internal/process"
 	"github.com/dominicbreuker/pspy/internal/pspy"
@@ -74,9 +74,9 @@ func root(cmd *cobra.Command, args []string) {
 		LogPS: logPS,
 		LogFS: logFS,
 	}
-	iw, err := inotify.NewInotifyWatcher()
+	iw, err := fswatcher.NewInotifyWatcher()
 	if err != nil {
-		logger.Errorf("Can't initialize inotify: %v", err)
+		logger.Errorf("Can't initialize fswatcher: %v", err)
 		os.Exit(1)
 	}
 	defer iw.Close()

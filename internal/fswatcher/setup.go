@@ -1,13 +1,15 @@
-package inotify
+package fswatcher
 
 import (
 	"fmt"
 
-	"github.com/dominicbreuker/pspy/internal/inotify/walker"
+	"github.com/dominicbreuker/pspy/internal/fswatcher/inotify"
+	isys "github.com/dominicbreuker/pspy/internal/fswatcher/inotify/sys"
+	"github.com/dominicbreuker/pspy/internal/fswatcher/walker"
 )
 
 type InotifyWatcher struct {
-	i *Inotify
+	i *inotify.Inotify
 }
 
 func (iw *InotifyWatcher) Close() {
@@ -15,7 +17,7 @@ func (iw *InotifyWatcher) Close() {
 }
 
 func NewInotifyWatcher() (*InotifyWatcher, error) {
-	i, err := NewInotify()
+	i, err := inotify.NewInotify(&isys.InotifySyscallsUNIX{})
 	if err != nil {
 		return nil, fmt.Errorf("setting up inotify: %v", err)
 	}
@@ -48,8 +50,8 @@ func (iw *InotifyWatcher) Setup(rdirs, dirs []string, errCh chan error) (chan st
 	return triggerCh, eventCh, nil
 }
 
-func addWatchers(dir string, depth int, i *Inotify, maxWatchers int, errCh chan error) {
-	dirCh, doneCh := walker.Walk(dir, depth, errCh)
+func addWatchers(dir string, depth int, i *inotify.Inotify, maxWatchers int, errCh chan error) {
+	dirCh, walkErrCh, doneCh := walker.Walk(dir, depth)
 loop:
 	for {
 		if maxWatchers > 0 && i.NumWatchers() >= maxWatchers {
@@ -57,6 +59,8 @@ loop:
 			break loop
 		}
 		select {
+		case err := <-walkErrCh:
+			errCh <- fmt.Errorf("adding inotift watchers: %v", err)
 		case dir, ok := <-dirCh:
 			if !ok {
 				break loop

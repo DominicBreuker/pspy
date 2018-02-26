@@ -1,4 +1,4 @@
-package inotify
+package fswatcher
 
 import (
 	"fmt"

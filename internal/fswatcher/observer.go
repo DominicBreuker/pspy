@@ -1,16 +1,17 @@
-package inotify
+package fswatcher
 
 import (
 	"fmt"
 
+	"github.com/dominicbreuker/pspy/internal/fswatcher/inotify"
 	"golang.org/x/sys/unix"
 )
 
-func Observe(i *Inotify, triggerCh chan struct{}, dataCh chan []byte, errCh chan error) {
+func Observe(i *inotify.Inotify, triggerCh chan struct{}, dataCh chan []byte, errCh chan error) {
 	buf := make([]byte, 5*unix.SizeofInotifyEvent)
 
 	for {
-		n, errno := unix.Read(i.fd, buf)
+		n, errno := unix.Read(i.FD, buf)
 		if n == -1 {
 			errCh <- fmt.Errorf("reading from inotify fd: errno: %d", errno)
 			return

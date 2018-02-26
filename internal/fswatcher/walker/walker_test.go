@@ -35,12 +35,12 @@ func TestWalk(t *testing.T) {
 			"testdata/subdir",
 			"testdata/subdir/subsubdir",
 		}, errs: []string{}},
-		{root: "testdata/non-existing-dir", depth: 1, errCh: newErrCh(), result: []string{}, errs: []string{"Can't walk directory testdata/non-existing-dir"}},
+		{root: "testdata/non-existing-dir", depth: 1, errCh: newErrCh(), result: []string{}, errs: []string{"visiting testdata/non-existing-dir"}},
 	}
 
 	for i, tt := range tests {
-		dirCh, doneCh := Walk(tt.root, tt.depth, tt.errCh)
-		dirs, errs := getAllDirsAndErrors(dirCh, tt.errCh)
+		dirCh, errCh, doneCh := Walk(tt.root, tt.depth)
+		dirs, errs := getAllDirsAndErrors(dirCh, errCh)
 
 		if !reflect.DeepEqual(dirs, tt.result) {
 			t.Fatalf("[%d] Wrong number of dirs found: %+v", i, dirs)
@@ -59,20 +59,20 @@ func getAllDirsAndErrors(dirCh chan string, errCh chan error) ([]string, []strin
 
 	doneDirsCh := make(chan struct{})
 	go func() {
+		defer close(doneDirsCh)
+		defer close(errCh)
 		for d := range dirCh {
 			dirs = append(dirs, d)
 		}
-		close(errCh)
-		close(doneDirsCh)
 	}()
 
 	doneErrsCh := make(chan struct{})
 	go func() {
+		defer close(doneErrsCh)
 		for err := range errCh {
 			tokens := strings.SplitN(err.Error(), ":", 2)
 			errs = append(errs, tokens[0])
 		}
-		close(doneErrsCh)
 	}()
 	<-doneDirsCh
 	<-doneErrsCh
