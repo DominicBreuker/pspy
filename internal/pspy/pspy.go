@@ -14,22 +14,22 @@ type Logger interface {
 	Eventf(format string, v ...interface{})
 }
 
-type InotifyWatcher interface {
-	Setup(rdirs, dirs []string, errCh chan error) (chan struct{}, chan string, error)
+type FSWatcher interface {
+	Start(rdirs, dirs []string, errCh chan error) (chan struct{}, chan string, error)
 }
 
 type ProcfsScanner interface {
 	Setup(triggerCh chan struct{}, interval time.Duration) (chan string, error)
 }
 
-func Start(cfg config.Config, logger Logger, inotify InotifyWatcher, pscan ProcfsScanner, sigCh chan os.Signal) (chan struct{}, error) {
+func Start(cfg config.Config, logger Logger, inotify FSWatcher, pscan ProcfsScanner, sigCh chan os.Signal) (chan struct{}, error) {
 	logger.Infof("Config: %+v\n", cfg)
 
 	// log all errors
 	errCh := make(chan error, 10)
 	go logErrors(errCh, logger)
 
-	triggerCh, fsEventCh, err := inotify.Setup(cfg.RDirs, cfg.Dirs, errCh)
+	triggerCh, fsEventCh, err := inotify.Start(cfg.RDirs, cfg.Dirs, errCh)
 	if err != nil {
 		logger.Errorf("Can't set up inotify watchers: %v\n", err)
 		return nil, errors.New("inotify error")
