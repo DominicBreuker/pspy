@@ -74,7 +74,7 @@ func root(cmd *cobra.Command, args []string) {
 		LogPS: logPS,
 		LogFS: logFS,
 	}
-	iw, err := fswatcher.NewInotifyWatcher()
+	iw, err := fswatcher.NewFSWatcher()
 	if err != nil {
 		logger.Errorf("Can't initialize fswatcher: %v", err)
 		os.Exit(1)

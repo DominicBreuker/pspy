@@ -9,7 +9,9 @@ import (
 )
 
 func TestInotify(t *testing.T) {
-	i, err := NewInotify()
+	i := NewInotify()
+
+	err := i.Init()
 	expectNoError(t, err)
 
 	err = i.Watch("testdata/folder")
