@@ -7,9 +7,15 @@ import (
 	"path/filepath"
 )
 
+type Walker struct{}
+
+func NewWalker() *Walker {
+	return &Walker{}
+}
+
 const maxInt = int(^uint(0) >> 1)
 
-func Walk(root string, depth int) (dirCh chan string, errCh chan error, doneCh chan struct{}) {
+func (w *Walker) Walk(root string, depth int) (dirCh chan string, errCh chan error, doneCh chan struct{}) {
 	if depth < 0 {
 		depth = maxInt
 	}

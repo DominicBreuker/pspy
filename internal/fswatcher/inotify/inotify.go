@@ -13,6 +13,17 @@ import (
 
 const maximumWatchersFile = "/proc/sys/fs/inotify/max_user_watches"
 
+// MaxWatchers is the maximum number of inotify watches supported by the Kernel
+// set to -1 if the number cannot be determined
+var MaxWatchers int = -1
+
+func init() {
+	mw, err := getMaxWatchers()
+	if err == nil {
+		MaxWatchers = mw
+	}
+}
+
 type Inotify struct {
 	FD       int
 	Watchers map[int]*Watcher
@@ -28,17 +39,20 @@ type Event struct {
 	Op   string
 }
 
-func NewInotify() (*Inotify, error) {
-	fd, errno := unix.InotifyInit1(unix.IN_CLOEXEC)
-	if fd < 0 {
-		return nil, fmt.Errorf("initializing inotify: errno: %d", errno)
-	}
-
-	i := &Inotify{
-		FD:       fd,
+func NewInotify() *Inotify {
+	return &Inotify{
+		FD:       0,
 		Watchers: make(map[int]*Watcher),
 	}
-	return i, nil
+}
+
+func (i *Inotify) Init() error {
+	fd, errno := unix.InotifyInit1(unix.IN_CLOEXEC)
+	if fd < 0 {
+		return fmt.Errorf("initializing inotify: errno: %d", errno)
+	}
+	i.FD = fd
+	return nil
 }
 
 func (i *Inotify) Watch(dir string) error {
@@ -112,7 +126,7 @@ func (i *Inotify) String() string {
 	}
 }
 
-func GetMaxWatchers() (int, error) {
+func getMaxWatchers() (int, error) {
 	b, err := ioutil.ReadFile(maximumWatchersFile)
 	if err != nil {
 		return 0, fmt.Errorf("reading from %s: %v", maximumWatchersFile, err)

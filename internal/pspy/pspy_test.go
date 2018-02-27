@@ -104,7 +104,7 @@ func newMockInotifyWatcher(setupErr error) *mockInotifyWatcher {
 	}
 }
 
-func (i *mockInotifyWatcher) Setup(rdirs, dirs []string, errCh chan error) (chan struct{}, chan string, error) {
+func (i *mockInotifyWatcher) Start(rdirs, dirs []string, errCh chan error) (chan struct{}, chan string, error) {
 	if i.setupErr != nil {
 		return nil, nil, i.setupErr
 	}

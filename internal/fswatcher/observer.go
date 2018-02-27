@@ -1,11 +1,10 @@
 package fswatcher
 
 import (
-	"github.com/dominicbreuker/pspy/internal/fswatcher/inotify"
 	"golang.org/x/sys/unix"
 )
 
-func Observe(i *inotify.Inotify, triggerCh chan struct{}, dataCh chan []byte, errCh chan error) {
+func Observe(i Inotify, triggerCh chan struct{}, dataCh chan []byte, errCh chan error) {
 	buf := make([]byte, 5*unix.SizeofInotifyEvent)
 
 	for {
