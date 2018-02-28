@@ -17,6 +17,8 @@ const maximumWatchersFile = "/proc/sys/fs/inotify/max_user_watches"
 // set to -1 if the number cannot be determined
 var MaxWatchers int = -1
 
+const EventSize int = unix.SizeofInotifyEvent
+
 func init() {
 	mw, err := getMaxWatchers()
 	if err == nil {
@@ -82,6 +84,13 @@ func (i *Inotify) ParseNextEvent(buf []byte) (*Event, uint32, error) {
 	}
 	sys := (*unix.InotifyEvent)(unsafe.Pointer(&buf[0]))
 	offset := unix.SizeofInotifyEvent + sys.Len
+
+	if sys.Wd == -1 {
+		// watch descriptors should never be negative, yet there appears to be an unfixed bug causing them to be:
+		// https://rachelbythebay.com/w/2014/11/24/touch/
+		// https://code.launchpad.net/~jamesodhunt/libnih/libnih-inotify-overflow-fix-for-777093/+merge/65372
+		return nil, offset, fmt.Errorf("possible inotify event overflow")
+	}
 
 	watcher, ok := i.Watchers[int(sys.Wd)]
 	if !ok {

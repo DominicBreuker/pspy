@@ -15,7 +15,8 @@ type Logger interface {
 }
 
 type FSWatcher interface {
-	Start(rdirs, dirs []string, errCh chan error) (chan struct{}, chan string, error)
+	Init(rdirs, dirs []string) (chan error, chan struct{})
+	Run() (chan struct{}, chan string, chan error)
 }
 
 type ProcfsScanner interface {
@@ -25,15 +26,19 @@ type ProcfsScanner interface {
 func Start(cfg config.Config, logger Logger, inotify FSWatcher, pscan ProcfsScanner, sigCh chan os.Signal) (chan struct{}, error) {
 	logger.Infof("Config: %+v\n", cfg)
 
-	// log all errors
-	errCh := make(chan error, 10)
+	errCh, doneCh := inotify.Init(cfg.RDirs, cfg.Dirs)
+initloop:
+	for {
+		select {
+		case <-doneCh:
+			break initloop
+		case err := <-errCh:
+			logger.Errorf("initializing fs watcher: %v", err)
+		}
+	}
+	triggerCh, fsEventCh, errCh := inotify.Run()
 	go logErrors(errCh, logger)
 
-	triggerCh, fsEventCh, err := inotify.Start(cfg.RDirs, cfg.Dirs, errCh)
-	if err != nil {
-		logger.Errorf("Can't set up inotify watchers: %v\n", err)
-		return nil, errors.New("inotify error")
-	}
 	psEventCh, err := pscan.Setup(triggerCh, 100*time.Millisecond)
 	if err != nil {
 		logger.Errorf("Can't set up procfs scanner: %+v\n", err)
@@ -41,7 +46,9 @@ func Start(cfg config.Config, logger Logger, inotify FSWatcher, pscan ProcfsScan
 	}
 
 	// ignore all file system events created on startup
+	logger.Infof("Draining file system events due to startup...")
 	drainChanFor(fsEventCh, 1*time.Second)
+	logger.Infof("done")
 
 	exit := make(chan struct{})
 	go func() {
@@ -80,67 +87,6 @@ func drainChanFor(c chan string, d time.Duration) {
 		}
 	}
 }
-
-// const MaxInt = int(^uint(0) >> 1)
-
-// func Watch(rdirs, dirs []string, logPS, logFS bool) {
-// 	maxWatchers, err := inotify.WatcherLimit()
-// 	if err != nil {
-// 		log.Printf("Can't get inotify watcher limit...: %v\n", err)
-// 	}
-// 	log.Printf("Inotify watcher limit: %d (/proc/sys/fs/inotify/max_user_watches)\n", maxWatchers)
-
-// 	ping := make(chan struct{})
-// 	in, err := inotify.NewInotify(ping, logFS)
-// 	if err != nil {
-// 		log.Fatalf("Can't init inotify: %v", err)
-// 	}
-// 	defer in.Close()
-
-// 	for _, dir := range rdirs {
-// 		addWatchers(dir, MaxInt, in, maxWatchers)
-// 	}
-// 	for _, dir := range dirs {
-// 		addWatchers(dir, 0, in, maxWatchers)
-// 	}
-
-// 	log.Printf("Inotify watchers set up: %s - watching now\n", in)
-
-// 	procList := process.NewProcList()
-
-// 	ticker := time.NewTicker(100 * time.Millisecond)
-
-// 	for {
-// 		select {
-// 		case <-ticker.C:
-// 			refresh(in, procList, logPS)
-// 		case <-ping:
-// 			refresh(in, procList, logPS)
-// 		}
-// 	}
-// }
-
-// func addWatchers(dir string, depth int, in *inotify.Inotify, maxWatchers int) {
-// 	dirCh, errCh, doneCh := walker.Walk(dir, depth)
-// loop:
-// 	for {
-// 		if in.NumWatchers() >= maxWatchers {
-// 			close(doneCh)
-// 			break loop
-// 		}
-// 		select {
-// 		case dir, ok := <-dirCh:
-// 			if !ok {
-// 				break loop
-// 			}
-// 			if err := in.Watch(dir); err != nil {
-// 				fmt.Fprintf(os.Stderr, "Can't create watcher: %v\n", err)
-// 			}
-// 		case err := <-errCh:
-// 			fmt.Fprintf(os.Stderr, "Error walking filesystem: %v\n", err)
-// 		}
-// 	}
-// }
 
 // func refresh(in *inotify.Inotify, pl *process.ProcList, print bool) {
 // 	in.Pause()
