@@ -24,6 +24,7 @@ type FSWatcher struct {
 	i           Inotify
 	w           Walker
 	maxWatchers int
+	eventSize   int
 }
 
 func NewFSWatcher() (*FSWatcher, error) {
@@ -31,11 +32,12 @@ func NewFSWatcher() (*FSWatcher, error) {
 		i:           inotify.NewInotify(),
 		w:           walker.NewWalker(),
 		maxWatchers: inotify.MaxWatchers,
+		eventSize:   inotify.EventSize,
 	}, nil
 }
 
-func (iw *FSWatcher) Close() {
-	iw.i.Close()
+func (fs *FSWatcher) Close() {
+	fs.i.Close()
 }
 
 func (fs *FSWatcher) Init(rdirs, dirs []string) (chan error, chan struct{}) {
@@ -48,10 +50,10 @@ func (fs *FSWatcher) Init(rdirs, dirs []string) (chan error, chan struct{}) {
 			errCh <- fmt.Errorf("setting up inotify: %v", err)
 		}
 		for _, dir := range rdirs {
-			addWatchers(dir, -1, fs.i, fs.maxWatchers, fs.w, errCh)
+			fs.addWatchers(dir, -1, errCh)
 		}
 		for _, dir := range dirs {
-			addWatchers(dir, 0, fs.i, fs.maxWatchers, fs.w, errCh)
+			fs.addWatchers(dir, 0, errCh)
 		}
 		close(doneCh)
 	}()
@@ -59,47 +61,65 @@ func (fs *FSWatcher) Init(rdirs, dirs []string) (chan error, chan struct{}) {
 	return errCh, doneCh
 }
 
-func addWatchers(dir string, depth int, i Inotify, maxWatchers int, w Walker, errCh chan error) {
-	dirCh, walkErrCh, doneCh := w.Walk(dir, depth)
-loop:
+func (fs *FSWatcher) addWatchers(dir string, depth int, errCh chan error) {
+	dirCh, walkErrCh, doneCh := fs.w.Walk(dir, depth)
+
 	for {
-		if maxWatchers > 0 && i.NumWatchers() >= maxWatchers {
+		if fs.maxWatchers > 0 && fs.i.NumWatchers() >= fs.maxWatchers {
 			close(doneCh)
-			break loop
+			return
 		}
+
 		select {
 		case err := <-walkErrCh:
 			errCh <- fmt.Errorf("adding inotift watchers: %v", err)
 		case dir, ok := <-dirCh:
 			if !ok {
-				break loop
+				return
 			}
-			if err := i.Watch(dir); err != nil {
+			if err := fs.i.Watch(dir); err != nil {
 				errCh <- fmt.Errorf("Can't create watcher: %v", err)
 			}
 		}
 	}
 }
 
-func (fs *FSWatcher) Start(rdirs, dirs []string, errCh chan error) (chan struct{}, chan string, error) {
-	err := fs.i.Init()
-	if err != nil {
-		return nil, nil, fmt.Errorf("setting up inotify: %v", err)
+func (fs *FSWatcher) Run() (chan struct{}, chan string, chan error) {
+	triggerCh, dataCh, eventCh, errCh := make(chan struct{}), make(chan []byte), make(chan string), make(chan error)
+
+	go fs.observe(triggerCh, dataCh, errCh)
+	go fs.parseEvents(dataCh, eventCh, errCh)
+
+	return triggerCh, eventCh, errCh
+}
+
+func (fs *FSWatcher) observe(triggerCh chan struct{}, dataCh chan []byte, errCh chan error) {
+	buf := make([]byte, 5*fs.eventSize)
+
+	for {
+		n, err := fs.i.Read(buf)
+		triggerCh <- struct{}{}
+		if err != nil {
+			errCh <- fmt.Errorf("reading inotify buffer: %v", err)
+			continue
+		}
+		bufCopy := make([]byte, n)
+		copy(bufCopy, buf)
+		dataCh <- bufCopy
 	}
+}
 
-	for _, dir := range rdirs {
-		addWatchers(dir, -1, fs.i, fs.maxWatchers, fs.w, errCh)
+func (fs *FSWatcher) parseEvents(dataCh chan []byte, eventCh chan string, errCh chan error) {
+	for buf := range dataCh {
+		var ptr uint32
+		for len(buf[ptr:]) > 0 {
+			event, size, err := fs.i.ParseNextEvent(buf[ptr:])
+			ptr += size
+			if err != nil {
+				errCh <- fmt.Errorf("parsing events: %v", err)
+				continue
+			}
+			eventCh <- fmt.Sprintf("%20s | %s", event.Op, event.Name)
+		}
 	}
-	for _, dir := range dirs {
-		addWatchers(dir, 0, fs.i, fs.maxWatchers, fs.w, errCh)
-	}
-
-	triggerCh := make(chan struct{})
-	dataCh := make(chan []byte)
-	go Observe(fs.i, triggerCh, dataCh, errCh)
-
-	eventCh := make(chan string)
-	go parseEvents(fs.i, dataCh, eventCh, errCh)
-
-	return triggerCh, eventCh, nil
 }
