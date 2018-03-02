@@ -1,38 +1,30 @@
-package process
+package psscanner
 
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
+	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
-type ProcfsScanner struct{}
-
-func NewProcfsScanner() *ProcfsScanner {
-	return &ProcfsScanner{}
+var procDirReader = func() ([]os.FileInfo, error) {
+	return ioutil.ReadDir("/proc")
 }
 
-func (p *ProcfsScanner) Setup(triggerCh chan struct{}, interval time.Duration) (chan string, error) {
-	psEventCh := make(chan string)
-	go func() {
-		for {
-			<-triggerCh
-		}
-	}()
-	return psEventCh, nil
+var procStatusReader = func(pid int) ([]byte, error) {
+	statPath := fmt.Sprintf("/proc/%d/status", pid)
+	return ioutil.ReadFile(statPath)
 }
 
-type ProcList map[int]string
-
-func NewProcList() *ProcList {
-	pl := make(ProcList)
-	return &pl
+var cmdLineReader = func(pid int) ([]byte, error) {
+	cmdPath := fmt.Sprintf("/proc/%d/cmdline", pid)
+	return ioutil.ReadFile(cmdPath)
 }
 
-func (pl ProcList) Refresh(print bool) error {
+type procList map[int]string
+
+func (pl procList) refresh(eventCh chan string) error {
 	pids, err := getPIDs()
 	if err != nil {
 		return err
@@ -50,9 +42,10 @@ func (pl ProcList) Refresh(print bool) error {
 			if err != nil {
 				uid = "???"
 			}
-			if print {
-				log.Printf("\x1b[31;1mCMD: UID=%-4s PID=%-6d | %s\x1b[0m\n", uid, pid, cmd)
-			}
+			eventCh <- fmt.Sprintf("CMD: UID=%-4s PID=%-6d | %s", uid, pid, cmd)
+			// if print {
+			// 	log.Printf("\x1b[31;1mCMD: UID=%-4s PID=%-6d | %s\x1b[0m\n", uid, pid, cmd)
+			// }
 			pl[pid] = cmd
 		}
 	}
@@ -61,7 +54,7 @@ func (pl ProcList) Refresh(print bool) error {
 }
 
 func getPIDs() ([]int, error) {
-	proc, err := ioutil.ReadDir("/proc")
+	proc, err := procDirReader()
 	if err != nil {
 		return nil, fmt.Errorf("opening proc dir: %v", err)
 	}
@@ -81,8 +74,7 @@ func getPIDs() ([]int, error) {
 }
 
 func getCmd(pid int) (string, error) {
-	cmdPath := fmt.Sprintf("/proc/%d/cmdline", pid)
-	cmd, err := ioutil.ReadFile(cmdPath)
+	cmd, err := cmdLineReader(pid)
 	if err != nil {
 		return "", err
 	}
@@ -95,8 +87,7 @@ func getCmd(pid int) (string, error) {
 }
 
 func getUID(pid int) (string, error) {
-	statPath := fmt.Sprintf("/proc/%d/status", pid)
-	stat, err := ioutil.ReadFile(statPath)
+	stat, err := procStatusReader(pid)
 	if err != nil {
 		return "", err
 	}

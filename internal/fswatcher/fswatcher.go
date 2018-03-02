@@ -27,13 +27,13 @@ type FSWatcher struct {
 	eventSize   int
 }
 
-func NewFSWatcher() (*FSWatcher, error) {
+func NewFSWatcher() *FSWatcher {
 	return &FSWatcher{
 		i:           inotify.NewInotify(),
 		w:           walker.NewWalker(),
 		maxWatchers: inotify.MaxWatchers,
 		eventSize:   inotify.EventSize,
-	}, nil
+	}
 }
 
 func (fs *FSWatcher) Close() {

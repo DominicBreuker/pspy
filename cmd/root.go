@@ -11,8 +11,8 @@ import (
 	"github.com/dominicbreuker/pspy/internal/config"
 	"github.com/dominicbreuker/pspy/internal/fswatcher"
 	"github.com/dominicbreuker/pspy/internal/logging"
-	"github.com/dominicbreuker/pspy/internal/process"
 	"github.com/dominicbreuker/pspy/internal/pspy"
+	"github.com/dominicbreuker/pspy/internal/psscanner"
 	"github.com/spf13/cobra"
 )
 
@@ -68,27 +68,26 @@ func init() {
 func root(cmd *cobra.Command, args []string) {
 	logger := logging.NewLogger()
 
-	cfg := config.Config{
+	cfg := &config.Config{
 		RDirs: rDirs,
 		Dirs:  dirs,
 		LogPS: logPS,
 		LogFS: logFS,
 	}
-	iw, err := fswatcher.NewFSWatcher()
-	if err != nil {
-		logger.Errorf("Can't initialize fswatcher: %v", err)
-		os.Exit(1)
-	}
-	defer iw.Close()
-	pscan := process.NewProcfsScanner()
+	fsw := fswatcher.NewFSWatcher()
+	defer fsw.Close()
+
+	pss := psscanner.NewPSScanner()
 
 	sigCh := make(chan os.Signal)
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	exit, err := pspy.Start(cfg, logger, iw, pscan, sigCh)
-	if err != nil {
-		os.Exit(1)
+	b := &pspy.Bindings{
+		Logger: logger,
+		FSW:    fsw,
+		PSS:    pss,
 	}
+	exit := pspy.Start(cfg, b, sigCh)
 	<-exit
 	os.Exit(0)
 }
