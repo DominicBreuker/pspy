@@ -64,7 +64,7 @@ func getPIDs() ([]int, error) {
 		if f.IsDir() {
 			name := f.Name()
 			pid, err := strconv.Atoi(name)
-			if err != nil {
+			if err != nil || pid <= 0 {
 				continue // not a pid
 			}
 			pids = append(pids, pid)
