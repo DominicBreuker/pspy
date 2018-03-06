@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dominicbreuker/pspy/internal/config"
+	"github.com/dominicbreuker/pspy/internal/logging"
 )
 
 type Bindings struct {
@@ -16,7 +17,7 @@ type Bindings struct {
 type Logger interface {
 	Infof(format string, v ...interface{})
 	Errorf(format string, v ...interface{})
-	Eventf(format string, v ...interface{})
+	Eventf(color int, format string, v ...interface{})
 }
 
 type FSWatcher interface {
@@ -48,15 +49,15 @@ func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} 
 		for {
 			select {
 			case se := <-sigCh:
-				b.Logger.Infof("Exiting program... (%s)\n", se)
+				b.Logger.Infof("Exiting program... (%s)", se)
 				exit <- struct{}{}
 			case fe := <-fsEventCh:
 				if cfg.LogFS {
-					b.Logger.Eventf("FS: %+v\n", fe)
+					b.Logger.Eventf(logging.ColorGreen, "FS: %+v", fe)
 				}
 			case pe := <-psEventCh:
 				if cfg.LogPS {
-					b.Logger.Eventf("CMD: %+v\n", pe)
+					b.Logger.Eventf(logging.ColorRed, "CMD: %+v", pe)
 				}
 			}
 		}
@@ -110,12 +111,3 @@ func drainEventsFor(triggerCh chan struct{}, eventCh chan string, d time.Duratio
 		}
 	}
 }
-
-// func refresh(in *inotify.Inotify, pl *process.ProcList, print bool) {
-// 	in.Pause()
-// 	if err := pl.Refresh(print); err != nil {
-// 		log.Printf("ERROR refreshing process list: %v", err)
-// 	}
-// 	time.Sleep(5 * time.Millisecond)
-// 	in.UnPause()
-// }
