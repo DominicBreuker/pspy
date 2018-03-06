@@ -1,6 +1,7 @@
 package psscanner
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -61,16 +62,28 @@ func getPIDs() ([]int, error) {
 
 	pids := make([]int, 0)
 	for _, f := range proc {
-		if f.IsDir() {
-			name := f.Name()
-			pid, err := strconv.Atoi(name)
-			if err != nil || pid <= 0 {
-				continue // not a pid
-			}
-			pids = append(pids, pid)
+		pid, err := file2Pid(f)
+		if err != nil {
+			continue
 		}
+		pids = append(pids, pid)
 	}
 	return pids, nil
+}
+
+var errNotAPid = errors.New("not a pid")
+
+func file2Pid(f os.FileInfo) (int, error) {
+	if !f.IsDir() {
+		return -1, errNotAPid
+	}
+
+	pid, err := strconv.Atoi(f.Name())
+	if err != nil || pid <= 0 {
+		return -1, errNotAPid
+	}
+
+	return pid, nil
 }
 
 func getCmd(pid int) (string, error) {
