@@ -1,8 +1,15 @@
 package logging
 
 import (
+	"fmt"
 	"log"
 	"os"
+)
+
+const (
+	ColorNone = iota
+	ColorRed
+	ColorGreen
 )
 
 type Logger struct {
@@ -30,6 +37,16 @@ func (l *Logger) Errorf(format string, v ...interface{}) {
 }
 
 // Eventf writes an event with timestamp to stdout
-func (l *Logger) Eventf(format string, v ...interface{}) {
-	l.eventLogger.Printf(format, v...)
+func (l *Logger) Eventf(color int, format string, v ...interface{}) {
+	msg := fmt.Sprintf(format, v...)
+
+	switch color {
+	case ColorRed:
+		msg = fmt.Sprintf("\x1b[31;1m%s\x1b[0m", msg)
+	case ColorGreen:
+		msg = fmt.Sprintf("\x1b[32;1m%s\x1b[0m", msg)
+	default:
+	}
+
+	l.eventLogger.Printf("%s", msg)
 }

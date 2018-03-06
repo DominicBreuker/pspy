@@ -42,7 +42,7 @@ func (pl procList) refresh(eventCh chan string) error {
 			if err != nil {
 				uid = "???"
 			}
-			eventCh <- fmt.Sprintf("CMD: UID=%-4s PID=%-6d | %s", uid, pid, cmd)
+			eventCh <- fmt.Sprintf("UID=%-4s PID=%-6d | %s", uid, pid, cmd)
 			// if print {
 			// 	log.Printf("\x1b[31;1mCMD: UID=%-4s PID=%-6d | %s\x1b[0m\n", uid, pid, cmd)
 			// }
