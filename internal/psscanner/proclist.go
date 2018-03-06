@@ -35,23 +35,24 @@ func (pl procList) refresh(eventCh chan string) error {
 		pid := pids[i]
 		_, ok := pl[pid]
 		if !ok {
-			cmd, err := getCmd(pid)
-			if err != nil {
-				cmd = "???" // process probably terminated
-			}
-			uid, err := getUID(pid)
-			if err != nil {
-				uid = "???"
-			}
-			eventCh <- fmt.Sprintf("UID=%-4s PID=%-6d | %s", uid, pid, cmd)
-			// if print {
-			// 	log.Printf("\x1b[31;1mCMD: UID=%-4s PID=%-6d | %s\x1b[0m\n", uid, pid, cmd)
-			// }
-			pl[pid] = cmd
+			pl.addPid(pid, eventCh)
 		}
 	}
 
 	return nil
+}
+
+func (pl procList) addPid(pid int, eventCh chan string) {
+	cmd, err := getCmd(pid)
+	if err != nil {
+		cmd = "???" // process probably terminated
+	}
+	uid, err := getUID(pid)
+	if err != nil {
+		uid = "???"
+	}
+	eventCh <- fmt.Sprintf("UID=%-4s PID=%-6d | %s", uid, pid, cmd)
+	pl[pid] = cmd
 }
 
 func getPIDs() ([]int, error) {
