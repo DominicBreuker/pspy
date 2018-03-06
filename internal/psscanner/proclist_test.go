@@ -171,3 +171,87 @@ func mockProcStatusReader(stat []byte, err error) (restore func()) {
 }
 
 // refresh
+
+func TestRefresh(t *testing.T) {
+	tests := []struct {
+		eventCh   chan string
+		pl        procList
+		newPids   []int
+		pidsAfter []int
+		events    []string
+	}{
+		{eventCh: make(chan string), pl: procList{}, newPids: []int{1, 2, 3}, pidsAfter: []int{3, 2, 1}, events: []string{
+			"UID=???  PID=3      | the-command",
+			"UID=???  PID=2      | the-command",
+			"UID=???  PID=1      | the-command",
+		}},
+		{eventCh: make(chan string), pl: procList{1: "pid-found-before"}, newPids: []int{1, 2, 3}, pidsAfter: []int{1, 3, 2}, events: []string{
+			"UID=???  PID=3      | the-command",
+			"UID=???  PID=2      | the-command",
+		}}, // no events emitted for PIDs already known
+	}
+
+	for _, tt := range tests {
+		restoreGetPIDs := mockPidList(tt.newPids)
+		restoreCmdLineReader := mockCmdLineReader([]byte("the-command"), nil)
+		restoreProcStatusReader := mockProcStatusReader([]byte(""), nil) // don't mock read value since it's not worth it
+
+		events := make([]string, 0)
+		done := make(chan struct{})
+		go func() {
+			for e := range tt.eventCh {
+				events = append(events, e)
+			}
+			done <- struct{}{}
+		}()
+		tt.pl.refresh(tt.eventCh)
+		close(tt.eventCh)
+		<-done
+
+		restoreProcStatusReader()
+		restoreCmdLineReader()
+		restoreGetPIDs()
+
+		pidsAfter := getPids(&tt.pl)
+
+		for _, pid := range tt.pidsAfter {
+			if !contains(pidsAfter, pid) {
+				t.Errorf("PID %d should be in list %v but was not!", pid, pidsAfter)
+			}
+		}
+		for _, pid := range pidsAfter {
+			if !contains(tt.pidsAfter, pid) {
+				t.Errorf("PID %d should be in list %v but was not!", pid, pidsAfter)
+			}
+		}
+		if !reflect.DeepEqual(events, tt.events) {
+			t.Errorf("Wrong events returned: got %v but want %v", events, tt.events)
+		}
+	}
+}
+
+func contains(list []int, v int) bool {
+	for _, i := range list {
+		if i == v {
+			return true
+		}
+	}
+	return false
+}
+
+func mockPidList(pids []int) func() {
+	dirs := make([]os.FileInfo, 0)
+	for _, pid := range pids {
+		dirs = append(dirs, newMockDir(fmt.Sprintf("%d", pid)))
+	}
+	restore := mockProcDirReader(dirs, nil)
+	return restore
+}
+
+func getPids(pl *procList) []int {
+	pids := make([]int, 0)
+	for pid := range *pl {
+		pids = append(pids, pid)
+	}
+	return pids
+}
