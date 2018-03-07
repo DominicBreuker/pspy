@@ -42,19 +42,6 @@ func (pl procList) refresh(eventCh chan string) error {
 	return nil
 }
 
-func (pl procList) addPid(pid int, eventCh chan string) {
-	cmd, err := getCmd(pid)
-	if err != nil {
-		cmd = "???" // process probably terminated
-	}
-	uid, err := getUID(pid)
-	if err != nil {
-		uid = "???"
-	}
-	eventCh <- fmt.Sprintf("UID=%-4s PID=%-6d | %s", uid, pid, cmd)
-	pl[pid] = cmd
-}
-
 func getPIDs() ([]int, error) {
 	proc, err := procDirReader()
 	if err != nil {
@@ -85,6 +72,19 @@ func file2Pid(f os.FileInfo) (int, error) {
 	}
 
 	return pid, nil
+}
+
+func (pl procList) addPid(pid int, eventCh chan string) {
+	cmd, err := getCmd(pid)
+	if err != nil {
+		cmd = "???" // process probably terminated
+	}
+	uid, err := getUID(pid)
+	if err != nil {
+		uid = "???"
+	}
+	eventCh <- fmt.Sprintf("UID=%-4s PID=%-6d | %s", uid, pid, cmd)
+	pl[pid] = cmd
 }
 
 func getCmd(pid int) (string, error) {
