@@ -60,7 +60,7 @@ func (i *Inotify) Init() error {
 func (i *Inotify) Watch(dir string) error {
 	wd, errno := unix.InotifyAddWatch(i.FD, dir, unix.IN_ALL_EVENTS)
 	if wd < 0 {
-		return fmt.Errorf("adding watch: errno: %d", errno)
+		return fmt.Errorf("adding watch to %s: errno: %d", dir, errno)
 	}
 	i.Watchers[wd] = &Watcher{
 		WD:  wd,
