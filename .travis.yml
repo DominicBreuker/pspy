@@ -10,4 +10,4 @@ env:
 
 script:
   - docker build -f "$DOCKERFILE" -t "$IMAGE_NAME" .
-  - docker run -it --rm $(IMAGE_NAME)
+  - docker run -it --rm "$IMAGE_NAME"
