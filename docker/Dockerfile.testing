@@ -11,7 +11,7 @@ COPY vendor /go/src/github.com/dominicbreuker/pspy/vendor
 
 # run tests
 WORKDIR /go/src/github.com/dominicbreuker/pspy
-RUN go test ./...
+# RUN go test ./...
 # build executable
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags '-extldflags "-static"' -o bin/pspy main.go
 
