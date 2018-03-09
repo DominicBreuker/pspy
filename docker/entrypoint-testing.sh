@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# run unit tests
+echo "[+] running unit tests"
+sudo /bin/sh -c 'GOPATH=/go /usr/local/go/bin/go test ./...'
+
+# run integration test
 sudo cron -f &
 sleep 1
 sudo ps | grep cron 1>/dev/null
