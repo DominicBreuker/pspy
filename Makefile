@@ -8,7 +8,7 @@ TEST_DOCKERFILE = $(PROJECT_DIR)/docker/Dockerfile.testing
 
 test:
 	docker build -f $(TEST_DOCKERFILE) -t $(TEST_IMAGE) . 
-	docker run -it --rm -v $(PROJECT_DIR)/.git:/go/src/github.com/dominicbreuker/pspy/.git $(TEST_IMAGE)
+	docker run -it --rm $(TEST_IMAGE)
 
 dev-build:
 	docker build -f $(DEV_DOCKERFILE) -t $(DEV_IMAGE) .
