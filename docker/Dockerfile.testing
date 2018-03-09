@@ -9,6 +9,7 @@ COPY main.go /go/src/github.com/dominicbreuker/pspy/main.go
 COPY cmd /go/src/github.com/dominicbreuker/pspy/cmd
 COPY internal /go/src/github.com/dominicbreuker/pspy/internal
 COPY vendor /go/src/github.com/dominicbreuker/pspy/vendor
+COPY .git /go/src/github.com/dominicbreuker/pspy/.git
 
 # run tests
 WORKDIR /go/src/github.com/dominicbreuker/pspy
