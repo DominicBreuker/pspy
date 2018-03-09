@@ -9,8 +9,10 @@ COPY cmd /go/src/github.com/dominicbreuker/pspy/cmd
 COPY internal /go/src/github.com/dominicbreuker/pspy/internal
 COPY vendor /go/src/github.com/dominicbreuker/pspy/vendor
 
-# build executable
+# run tests
 WORKDIR /go/src/github.com/dominicbreuker/pspy
+RUN go test ./...
+# build executable
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags '-extldflags "-static"' -o bin/pspy main.go
 
 ### Prepare integration test ###
