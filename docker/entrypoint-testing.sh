@@ -1,5 +1,40 @@
 #!/bin/bash
 
+### test covereage
+
+if [ -z ${CC_TEST_REPORTER_ID+x} ]; then
+  echo "[+] skipping test coverage"
+else
+  echo "[+] reporting test coverage"
+  curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+  chmod +x ./cc-test-reporter
+
+  # git config --global user.email "dummy@example.com"
+  # git config --global user.name "Mr Robot"
+  # git init
+  # git add .
+  # git commit -m 'commit that makes cc test reporter happy'
+
+  ./cc-test-reporter before-build
+
+  for pkg in $(go list ./... | grep -v main); do
+    echo "doing $pkg"
+    go test -coverprofile=$(echo $pkg | tr / -).cover $pkg
+  done
+  echo "mode: set" > c.out
+  grep -h -v "^mode:" ./*.cover >> c.out
+  rm -f *.cover
+
+  echo "reporting now"
+  ./cc-test-reporter after-build
+
+  rm c.out
+
+  rm ./cc-test-reporter
+fi
+
+### integration test
+
 sudo cron -f &
 sleep 1
 sudo ps | grep cron 1>/dev/null

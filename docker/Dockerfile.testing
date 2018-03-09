@@ -3,6 +3,7 @@ FROM golang:1.10-stretch
 RUN apt-get update && apt-get -y install cron python3 sudo procps
 
 ### Test and build ###
+
 # copy source code
 COPY main.go /go/src/github.com/dominicbreuker/pspy/main.go
 COPY cmd /go/src/github.com/dominicbreuker/pspy/cmd
@@ -27,7 +28,7 @@ RUN useradd -ms /bin/bash myuser && \
     adduser myuser sudo && \
     echo 'myuser ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 USER myuser
-
+RUN sudo chown -R myuser:myuser /go/*
 
 # drop into bash shell
 COPY docker/entrypoint-testing.sh /entrypoint.sh
