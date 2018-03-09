@@ -2,7 +2,6 @@ version: 2
 jobs:
   build:
     machine: true
-    docker:
       - image: docker:17.05.0-ce-git
     steps:
       - checkout
