@@ -1,10 +1,10 @@
 version: 2
 jobs:
   build:
-    machine: true
-      image: docker:17.05.0-ce-git
+    docker:
+      - image: docker:17.05.0-ce-git
     steps:
       - checkout
       - setup_remote_docker
       - run: docker build -f ./docker/Dockerfile.testing -t local/pspy-testing:latest . 
-      - run: docker run -it -v `pwd`/.git:/go/src/github.com/dominicbreuker/pspy/.git -e CC_TEST_REPORTER_ID=$CC_TEST_REPORTER_ID local/pspy-testing:latest
+      - run: docker run -it -e CC_TEST_REPORTER_ID=$CC_TEST_REPORTER_ID local/pspy-testing:latest
