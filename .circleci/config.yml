@@ -8,8 +8,3 @@ jobs:
       - setup_remote_docker
       - run: docker build -f ./docker/Dockerfile.testing -t local/pspy-testing:latest . 
       - run: docker run -it local/pspy-testing:latest
-
-
-
-	
-	
