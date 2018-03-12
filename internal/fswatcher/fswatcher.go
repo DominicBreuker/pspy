@@ -45,43 +45,65 @@ func (fs *FSWatcher) Init(rdirs, dirs []string) (chan error, chan struct{}) {
 	doneCh := make(chan struct{})
 
 	go func() {
+		defer close(doneCh)
+
 		err := fs.i.Init()
 		if err != nil {
 			errCh <- fmt.Errorf("setting up inotify: %v", err)
+			return
 		}
-		for _, dir := range rdirs {
-			fs.addWatchers(dir, -1, errCh)
-		}
-		for _, dir := range dirs {
-			fs.addWatchers(dir, 0, errCh)
-		}
-		close(doneCh)
+
+		fs.addWatchers(rdirs, dirs, errCh)
 	}()
 
 	return errCh, doneCh
 }
 
-func (fs *FSWatcher) addWatchers(dir string, depth int, errCh chan error) {
+func (fs *FSWatcher) addWatchers(rdirs, dirs []string, errCh chan error) {
+	for _, dir := range rdirs {
+		fs.addWatchersToDir(dir, -1, errCh)
+	}
+	for _, dir := range dirs {
+		fs.addWatchersToDir(dir, 0, errCh)
+	}
+}
+
+func (fs *FSWatcher) addWatchersToDir(dir string, depth int, errCh chan error) {
 	dirCh, walkErrCh, doneCh := fs.w.Walk(dir, depth)
 
 	for {
-		if fs.maxWatchers > 0 && fs.i.NumWatchers() >= fs.maxWatchers {
+		if fs.maximumWatchersExceeded() {
 			close(doneCh)
 			return
 		}
 
-		select {
-		case err := <-walkErrCh:
-			errCh <- fmt.Errorf("adding inotift watchers: %v", err)
-		case dir, ok := <-dirCh:
-			if !ok {
-				return
-			}
-			if err := fs.i.Watch(dir); err != nil {
-				errCh <- fmt.Errorf("Can't create watcher: %v", err)
-			}
+		done, err := fs.handleNextWalkerResult(dirCh, walkErrCh)
+		if err != nil {
+			errCh <- err
+		}
+		if done {
+			return
 		}
 	}
+}
+
+func (fs *FSWatcher) maximumWatchersExceeded() bool {
+	return fs.maxWatchers > 0 && fs.i.NumWatchers() >= fs.maxWatchers
+}
+
+func (fs *FSWatcher) handleNextWalkerResult(dirCh chan string, walkErrCh chan error) (bool, error) {
+	select {
+	case err := <-walkErrCh:
+		return false, fmt.Errorf("adding inotify watchers: %v", err)
+	case dir, ok := <-dirCh:
+		if !ok {
+			return true, nil // finished
+		}
+		if err := fs.i.Watch(dir); err != nil {
+			return false, fmt.Errorf("Can't create watcher: %v", err)
+		}
+	}
+	return false, nil
 }
 
 func (fs *FSWatcher) Run() (chan struct{}, chan string, chan error) {
@@ -111,15 +133,19 @@ func (fs *FSWatcher) observe(triggerCh chan struct{}, dataCh chan []byte, errCh 
 
 func (fs *FSWatcher) parseEvents(dataCh chan []byte, eventCh chan string, errCh chan error) {
 	for buf := range dataCh {
-		var ptr uint32
-		for len(buf[ptr:]) > 0 {
-			event, size, err := fs.i.ParseNextEvent(buf[ptr:])
-			ptr += size
-			if err != nil {
-				errCh <- fmt.Errorf("parsing events: %v", err)
-				continue
-			}
-			eventCh <- fmt.Sprintf("%20s | %s", event.Op, event.Name)
+		fs.handleChunk(buf, eventCh, errCh)
+	}
+}
+
+func (fs *FSWatcher) handleChunk(buf []byte, eventCh chan string, errCh chan error) {
+	var ptr uint32
+	for len(buf[ptr:]) > 0 {
+		event, size, err := fs.i.ParseNextEvent(buf[ptr:])
+		ptr += size
+		if err != nil {
+			errCh <- fmt.Errorf("parsing events: %v", err)
+			continue
 		}
+		eventCh <- fmt.Sprintf("%20s | %s", event.Op, event.Name)
 	}
 }
