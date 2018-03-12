@@ -37,13 +37,13 @@ func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} 
 
 	psEventCh := startPSS(b.PSS, b.Logger, triggerCh)
 
-	go func() {
-		for {
-			<-time.After(100 * time.Millisecond)
-			triggerCh <- struct{}{}
-		}
-	}()
+	triggerEvery(100*time.Millisecond, triggerCh)
 
+	exit := printOutput(cfg, b, sigCh, fsEventCh, psEventCh)
+	return exit
+}
+
+func printOutput(cfg *config.Config, b *Bindings, sigCh chan os.Signal, fsEventCh chan string, psEventCh chan string) chan struct{} {
 	exit := make(chan struct{})
 	go func() {
 		for {
@@ -92,6 +92,15 @@ func startPSS(pss PSScanner, logger Logger, triggerCh chan struct{}) (psEventCh 
 	psEventCh, errCh := pss.Run(triggerCh)
 	go logErrors(errCh, logger)
 	return psEventCh
+}
+
+func triggerEvery(d time.Duration, triggerCh chan struct{}) {
+	go func() {
+		for {
+			<-time.After(d)
+			triggerCh <- struct{}{}
+		}
+	}()
 }
 
 func logErrors(errCh chan error, logger Logger) {
