@@ -97,19 +97,26 @@ func (i *Inotify) ParseNextEvent(buf []byte) (*Event, uint32, error) {
 		return nil, offset, fmt.Errorf("unknown watcher ID: %d", sys.Wd)
 	}
 
+	return &Event{
+		Name: getEventName(watcher, sys, buf, offset),
+		Op:   getEventOp(sys),
+	}, offset, nil
+}
+
+func getEventName(watcher *Watcher, sys *unix.InotifyEvent, buf []byte, offset uint32) string {
 	name := watcher.Dir + "/"
 	if sys.Len > 0 && len(buf) >= int(offset) {
 		name += string(bytes.TrimRight(buf[unix.SizeofInotifyEvent:offset], "\x00"))
 	}
+	return name
+}
+
+func getEventOp(sys *unix.InotifyEvent) string {
 	op, ok := InotifyEvents[sys.Mask]
 	if !ok {
 		op = strconv.FormatInt(int64(sys.Mask), 2)
 	}
-
-	return &Event{
-		Name: name,
-		Op:   op,
-	}, offset, nil
+	return op
 }
 
 func (i *Inotify) Close() error {
