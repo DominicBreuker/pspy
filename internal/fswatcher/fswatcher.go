@@ -77,11 +77,7 @@ func (fs *FSWatcher) addWatchersToDir(dir string, depth int, errCh chan error) {
 			return
 		}
 
-		done, err := fs.handleNextWalkerResult(dirCh, walkErrCh)
-		if err != nil {
-			errCh <- err
-		}
-		if done {
+		if done := fs.handleNextWalkerResult(dirCh, walkErrCh, errCh); done {
 			return
 		}
 	}
@@ -91,19 +87,19 @@ func (fs *FSWatcher) maximumWatchersExceeded() bool {
 	return fs.maxWatchers > 0 && fs.i.NumWatchers() >= fs.maxWatchers
 }
 
-func (fs *FSWatcher) handleNextWalkerResult(dirCh chan string, walkErrCh chan error) (bool, error) {
+func (fs *FSWatcher) handleNextWalkerResult(dirCh chan string, walkErrCh chan error, errCh chan error) bool {
 	select {
 	case err := <-walkErrCh:
-		return false, fmt.Errorf("adding inotify watchers: %v", err)
+		errCh <- fmt.Errorf("adding inotify watchers: %v", err)
 	case dir, ok := <-dirCh:
 		if !ok {
-			return true, nil // finished
+			return true
 		}
 		if err := fs.i.Watch(dir); err != nil {
-			return false, fmt.Errorf("Can't create watcher: %v", err)
+			errCh <- fmt.Errorf("Can't create watcher: %v", err)
 		}
 	}
-	return false, nil
+	return false
 }
 
 func (fs *FSWatcher) Run() (chan struct{}, chan string, chan error) {
