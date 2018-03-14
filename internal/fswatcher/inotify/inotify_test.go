@@ -4,16 +4,21 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
 )
 
 func TestInotify(t *testing.T) {
+	// init
+
 	i := NewInotify()
 
 	err := i.Init()
 	expectNoError(t, err)
+
+	// add watchers
 
 	err = i.Watch("testdata/folder")
 	expectNoError(t, err)
@@ -22,6 +27,13 @@ func TestInotify(t *testing.T) {
 	if fmt.Sprintf("%v", err) != "adding watch to testdata/non-existing-folder: errno: 2" {
 		t.Errorf("Wrong error for non-existing-folder: got %v", err)
 	}
+
+	numW := i.NumWatchers()
+	if numW != 1 {
+		t.Errorf("Expected 1 watcher but have %d", numW)
+	}
+
+	// create and parse events
 
 	err = ioutil.WriteFile("testdata/folder/f1", []byte("file content"), 0644)
 	expectNoError(t, err)
@@ -43,8 +55,15 @@ func TestInotify(t *testing.T) {
 		t.Fatalf("Wrong offset: %d", offset)
 	}
 
+	// finish
+
 	err = i.Close()
 	expectNoError(t, err)
+
+	_, err = i.Read(buf)
+	if !strings.HasSuffix(fmt.Sprintf("%v", err), "errno: 9") {
+		t.Errorf("Wrong error for reading after close: got %v", err)
+	}
 }
 
 func expectNoError(t *testing.T, err error) {
