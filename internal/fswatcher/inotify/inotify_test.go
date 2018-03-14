@@ -1,6 +1,7 @@
 package inotify
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -16,6 +17,11 @@ func TestInotify(t *testing.T) {
 
 	err = i.Watch("testdata/folder")
 	expectNoError(t, err)
+
+	err = i.Watch("testdata/non-existing-folder")
+	if fmt.Sprintf("%v", err) != "adding watch to testdata/non-existing-folder: errno: 2" {
+		t.Errorf("Wrong error for non-existing-folder: got %v", err)
+	}
 
 	err = ioutil.WriteFile("testdata/folder/f1", []byte("file content"), 0644)
 	expectNoError(t, err)
