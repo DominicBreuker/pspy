@@ -130,18 +130,6 @@ func (i *Inotify) NumWatchers() int {
 	return len(i.Watchers)
 }
 
-func (i *Inotify) String() string {
-	if len(i.Watchers) < 20 {
-		dirs := make([]string, 0)
-		for _, w := range i.Watchers {
-			dirs = append(dirs, w.Dir)
-		}
-		return fmt.Sprintf("Watching: %v", dirs)
-	} else {
-		return fmt.Sprintf("Watching %d directories", len(i.Watchers))
-	}
-}
-
 func getMaxWatchers() (int, error) {
 	b, err := ioutil.ReadFile(maximumWatchersFile)
 	if err != nil {
