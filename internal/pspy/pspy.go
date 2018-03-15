@@ -33,7 +33,7 @@ func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} 
 	b.Logger.Infof("Config: %+v\n", cfg)
 
 	initFSW(b.FSW, cfg.RDirs, cfg.Dirs, b.Logger)
-	triggerCh, fsEventCh := startFSW(b.FSW, b.Logger)
+	triggerCh, fsEventCh := startFSW(b.FSW, b.Logger, 1*time.Second)
 
 	psEventCh := startPSS(b.PSS, b.Logger, triggerCh)
 
@@ -77,13 +77,13 @@ func initFSW(fsw FSWatcher, rdirs, dirs []string, logger Logger) {
 	}
 }
 
-func startFSW(fsw FSWatcher, logger Logger) (triggerCh chan struct{}, fsEventCh chan string) {
+func startFSW(fsw FSWatcher, logger Logger, drainFor time.Duration) (triggerCh chan struct{}, fsEventCh chan string) {
 	triggerCh, fsEventCh, errCh := fsw.Run()
 	go logErrors(errCh, logger)
 
 	// ignore all file system events created on startup
 	logger.Infof("Draining file system events due to startup...")
-	drainEventsFor(triggerCh, fsEventCh, 1*time.Second)
+	drainEventsFor(triggerCh, fsEventCh, drainFor)
 	logger.Infof("done")
 	return triggerCh, fsEventCh
 }
@@ -106,7 +106,7 @@ func triggerEvery(d time.Duration, triggerCh chan struct{}) {
 func logErrors(errCh chan error, logger Logger) {
 	for {
 		err := <-errCh
-		logger.Errorf("ERROR: %v\n", err)
+		logger.Errorf("ERROR: %v", err)
 	}
 }
 
