@@ -1,140 +1,152 @@
 package pspy
 
-// import (
-// 	"fmt"
-// 	"os"
-// 	"syscall"
-// 	"testing"
-// 	"time"
+import (
+	"errors"
+	"fmt"
+	"testing"
+	"time"
+)
 
-// 	"github.com/dominicbreuker/pspy/internal/config"
-// )
+func TestInitFSW(t *testing.T) {
+	l := newMockLogger()
+	fsw := newMockFSWatcher()
+	rdirs := make([]string, 0)
+	dirs := make([]string, 0)
+	go func() {
+		fsw.initErrCh <- errors.New("error1")
+		fsw.initErrCh <- errors.New("error2")
+		close(fsw.initDoneCh)
+	}()
 
-// func TestStart(t *testing.T) {
-// 	cfg := config.Config{
-// 		RDirs: []string{"rdir"},
-// 		Dirs:  []string{"dir"},
-// 		LogFS: true,
-// 		LogPS: true,
-// 	}
-// 	mockLogger := newMockLogger()
-// 	mockIW := newMockFSWatcher()
-// 	mockPS := newMockProcfsScanner(nil)
-// 	sigCh := make(chan os.Signal)
+	initFSW(fsw, rdirs, dirs, l)
 
-// 	exit, err := Init(cfg, mockLogger, mockIW, mockPS, sigCh)
-// 	if err != nil {
-// 		t.Fatalf("Unexpcted error: %v", err)
-// 	}
-// 	mockIW.fsEventCh <- "some fs event"
-// 	expectMsg(t, mockLogger.Event, "FS: some fs event\n")
+	expectMessage(t, l.Error, "initializing fs watcher: error1")
+	expectMessage(t, l.Error, "initializing fs watcher: error2")
+	expectClosed(t, fsw.initDoneCh)
+}
 
-// 	mockPS.psEventCh <- "some ps event"
-// 	expectMsg(t, mockLogger.Event, "CMD: some ps event\n")
+// very flaky test... refactor code!
+func TestStartFSW(t *testing.T) {
+	l := newMockLogger()
+	fsw := newMockFSWatcher()
+	drainFor := 100 * time.Millisecond
 
-// 	sigCh <- syscall.SIGINT
-// 	expectExit(t, exit)
-// }
+	go func() {
+		fsw.runTriggerCh <- struct{}{} // trigger sent while draining
+		fsw.runEventCh <- "event sent while draining"
+		fsw.runErrCh <- errors.New("error sent while draining")
+		<-time.After(drainFor) // ensure draining is over
+		fsw.runTriggerCh <- struct{}{}
+		fsw.runEventCh <- "event sent after draining"
+		fsw.runErrCh <- errors.New("error sent after draining")
+	}()
 
-// func expectMsg(t *testing.T, ch chan string, msg string) {
-// 	select {
-// 	case received := <-ch:
-// 		if received != msg {
-// 			t.Fatalf("Wanted to receive %s but got %s", msg, received)
-// 		}
-// 	case <-time.After(500 * time.Millisecond):
-// 		t.Fatalf("Did not receive message in time. Wanted: %s", msg)
-// 	}
-// }
+	// sends no events and triggers from the drain phase
+	triggerCh, fsEventCh := startFSW(fsw, l, drainFor)
+	expectMessage(t, l.Info, "Draining file system events due to startup...")
+	expectMessage(t, l.Error, "ERROR: error sent while draining")
+	expectMessage(t, l.Info, "done")
+	expectTrigger(t, triggerCh)
+	expectMessage(t, fsEventCh, "event sent after draining")
+}
 
-// func expectExit(t *testing.T, ch chan struct{}) {
-// 	select {
-// 	case <-ch:
-// 		return
-// 	case <-time.After(500 * time.Millisecond):
-// 		t.Fatalf("Did not receive exit signal in time")
-// 	}
-// }
+// #### Helpers ####
 
-// // ##### Mocks #####
+var timeout = 100 * time.Millisecond
+var errTimeout = errors.New("timeout")
 
-// // Logger
+func expectMessage(t *testing.T, ch chan string, expected string) {
+	select {
+	case actual := <-ch:
+		if actual != expected {
+			t.Fatalf("Wrong message: got '%s' but wanted %s", actual, expected)
+		}
+	case <-time.After(timeout):
+		t.Fatalf("Did not get message in time: %s", expected)
+	}
+}
 
-// type mockLogger struct {
-// 	Info  chan string
-// 	Error chan string
-// 	Event chan string
-// }
+func expectTrigger(t *testing.T, ch chan struct{}) {
+	select {
+	case <-ch:
+		return
+	case <-time.After(timeout):
+		t.Fatalf("Did not get trigger in time")
+	}
+}
 
-// func newMockLogger() *mockLogger {
-// 	return &mockLogger{
-// 		Info:  make(chan string, 10),
-// 		Error: make(chan string, 10),
-// 		Event: make(chan string, 10),
-// 	}
-// }
+func expectClosed(t *testing.T, ch chan struct{}) {
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatalf("Channel not closed: got ok=%t", ok)
+		}
+	case <-time.After(timeout):
+		t.Fatalf("Channel not closed: timeout!")
+	}
+}
 
-// func (l *mockLogger) Infof(format string, v ...interface{}) {
-// 	l.Info <- fmt.Sprintf(format, v...)
-// }
+// ##### Mocks #####
 
-// func (l *mockLogger) Errorf(format string, v ...interface{}) {
-// 	l.Error <- fmt.Sprintf(format, v...)
-// }
+// Logger
 
-// func (l *mockLogger) Eventf(format string, v ...interface{}) {
-// 	l.Event <- fmt.Sprintf(format, v...)
-// }
+type mockLogger struct {
+	Info  chan string
+	Error chan string
+	Event chan string
+}
 
-// // InotfiyWatcher
+func newMockLogger() *mockLogger {
+	return &mockLogger{
+		Info:  make(chan string, 10),
+		Error: make(chan string, 10),
+		Event: make(chan string, 10),
+	}
+}
 
-// type mockFSWatcher struct {
-// 	initErrCh    chan error
-// 	initDoneCh   chan struct{}
-// 	runTriggerCh chan struct{}
-// 	runEventCh   chan struct{}
-// 	runErrorCh   chan struct{}
-// 	closed       bool
-// }
+func (l *mockLogger) Infof(format string, v ...interface{}) {
+	l.Info <- fmt.Sprintf(format, v...)
+}
 
-// func newMockFSWatcher() *mockFSWatcher {
-// 	return &mockFSWatcher{}
-// }
+func (l *mockLogger) Errorf(format string, v ...interface{}) {
+	l.Error <- fmt.Sprintf(format, v...)
+}
 
-// func (fs *mockFSWatcher) Init(rdirs, dirs []string) (chan error, chan struct{}) {
-// 	fs.initErrCh = make(chan error)
-// 	fs.initDoneCh = make(chan struct{})
-// 	return fs.initErrCh, fs.initDoneCh
-// }
+func (l *mockLogger) Eventf(color int, format string, v ...interface{}) {
+	m := fmt.Sprintf(format, v...)
+	l.Event <- fmt.Sprintf("%d %s", color, m)
+}
 
-// func (fs *mockFSWatcher) Run() (chan struct{}, chan string, chan error) {
-// 	fs.runTriggerCh, fs.runEventCh, fs.runErrorCh = make(chan struct{}), make(chan string), make(chan error)
-// 	return fs.runTriggerCh, fs.runEventCh, fs.runErrorCh
-// }
+// FSWatcher
 
-// func (i mockFSWatcher) Close() {
-// 	i.closed = true
-// }
+type mockFSWatcher struct {
+	rdirs        []string
+	dirs         []string
+	initErrCh    chan error
+	initDoneCh   chan struct{}
+	runTriggerCh chan struct{}
+	runEventCh   chan string
+	runErrCh     chan error
+}
 
-// // ProcfsScanner
+func newMockFSWatcher() *mockFSWatcher {
+	return &mockFSWatcher{
+		rdirs:        make([]string, 0),
+		dirs:         make([]string, 0),
+		initErrCh:    make(chan error),
+		initDoneCh:   make(chan struct{}),
+		runTriggerCh: make(chan struct{}),
+		runEventCh:   make(chan string),
+		runErrCh:     make(chan error),
+	}
+}
 
-// type mockProcfsScanner struct {
-// 	triggerCh chan struct{}
-// 	interval  time.Duration
-// 	psEventCh chan string
-// 	setupErr  error
-// }
+func (fsw *mockFSWatcher) Init(rdirs, dirs []string) (chan error, chan struct{}) {
+	fsw.rdirs = rdirs
+	fsw.dirs = dirs
+	return fsw.initErrCh, fsw.initDoneCh
+}
 
-// func newMockProcfsScanner(setupErr error) *mockProcfsScanner {
-// 	return &mockProcfsScanner{
-// 		psEventCh: make(chan string),
-// 		setupErr:  setupErr,
-// 	}
-// }
-
-// func (p *mockProcfsScanner) Setup(triggerCh chan struct{}, interval time.Duration) (chan string, error) {
-// 	if p.setupErr != nil {
-// 		return nil, p.setupErr
-// 	}
-// 	return p.psEventCh, nil
-// }
+func (fsw *mockFSWatcher) Run() (chan struct{}, chan string, chan error) {
+	return fsw.runTriggerCh, fsw.runEventCh, fsw.runErrCh
+}
