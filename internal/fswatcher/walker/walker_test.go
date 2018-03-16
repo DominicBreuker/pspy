@@ -39,7 +39,7 @@ func TestWalk(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		w := &Walker{}
+		w := NewWalker()
 		dirCh, errCh, doneCh := w.Walk(tt.root, tt.depth)
 		dirs, errs := getAllDirsAndErrors(dirCh, errCh)
 
