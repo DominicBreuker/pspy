@@ -30,10 +30,10 @@ type PSScanner interface {
 }
 
 func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} {
-	b.Logger.Infof("Config: %+v\n", cfg)
+	b.Logger.Infof("Config: %+v", cfg)
 
 	initFSW(b.FSW, cfg.RDirs, cfg.Dirs, b.Logger)
-	triggerCh, fsEventCh := startFSW(b.FSW, b.Logger, 1*time.Second)
+	triggerCh, fsEventCh := startFSW(b.FSW, b.Logger, cfg.DrainFor)
 
 	psEventCh := startPSS(b.PSS, b.Logger, triggerCh)
 

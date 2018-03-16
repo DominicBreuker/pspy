@@ -3,8 +3,12 @@ package pspy
 import (
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/dominicbreuker/pspy/internal/config"
+	"github.com/dominicbreuker/pspy/internal/logging"
 )
 
 func TestInitFSW(t *testing.T) {
@@ -50,6 +54,67 @@ func TestStartFSW(t *testing.T) {
 	expectMessage(t, fsEventCh, "event sent after draining")
 }
 
+func TestStartPSS(t *testing.T) {
+	pss := newMockPSScanner()
+	l := newMockLogger()
+	triggerCh := make(chan struct{})
+
+	go func() {
+		pss.runErrCh <- errors.New("error during refresh")
+	}()
+	startPSS(pss, l, triggerCh)
+
+	expectMessage(t, l.Error, "ERROR: error during refresh")
+}
+
+func TestStart(t *testing.T) {
+	drainFor := 10 * time.Millisecond
+	triggerEvery := 999 * time.Second
+	l := newMockLogger()
+	fsw := newMockFSWatcher()
+	pss := newMockPSScanner()
+
+	b := &Bindings{
+		Logger: l,
+		FSW:    fsw,
+		PSS:    pss,
+	}
+	cfg := &config.Config{
+		RDirs:        []string{"rdir1", "rdir2"},
+		Dirs:         []string{"dir1", "dir2"},
+		LogFS:        true,
+		LogPS:        true,
+		DrainFor:     drainFor,
+		TriggerEvery: triggerEvery,
+	}
+	sigCh := make(chan os.Signal)
+
+	go func() {
+		close(fsw.initDoneCh)
+		<-time.After(2 * drainFor)
+		fsw.runTriggerCh <- struct{}{}
+		pss.runEventCh <- "pss event"
+		pss.runErrCh <- errors.New("pss error")
+		fsw.runEventCh <- "fsw event"
+		fsw.runErrCh <- errors.New("fsw error")
+		sigCh <- os.Interrupt
+	}()
+
+	exitCh := Start(cfg, b, sigCh)
+	expectMessage(t, l.Info, "Config: Printing events: processes=true | file-system-events=true ||| Watching directories: [rdir1 rdir2] (recursive) | [dir1 dir2] (non-recursive)")
+	expectMessage(t, l.Info, "Draining file system events due to startup...")
+	<-time.After(2 * drainFor)
+	expectMessage(t, l.Info, "done")
+	expectTrigger(t, pss.runTriggerCh) // pss receives triggers from fsw
+	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: pss event", logging.ColorRed))
+	expectMessage(t, l.Error, "ERROR: pss error")
+	expectMessage(t, l.Event, fmt.Sprintf("%d FS: fsw event", logging.ColorGreen))
+	expectMessage(t, l.Error, "ERROR: fsw error")
+	expectMessage(t, l.Info, "Exiting program... (interrupt)")
+
+	expectExit(t, exitCh)
+}
+
 // #### Helpers ####
 
 var timeout = 100 * time.Millisecond
@@ -59,7 +124,7 @@ func expectMessage(t *testing.T, ch chan string, expected string) {
 	select {
 	case actual := <-ch:
 		if actual != expected {
-			t.Fatalf("Wrong message: got '%s' but wanted %s", actual, expected)
+			t.Fatalf("Wrong message: got '%s' but wanted '%s'", actual, expected)
 		}
 	case <-time.After(timeout):
 		t.Fatalf("Did not get message in time: %s", expected)
@@ -67,11 +132,23 @@ func expectMessage(t *testing.T, ch chan string, expected string) {
 }
 
 func expectTrigger(t *testing.T, ch chan struct{}) {
+	if err := expectChanMsg(ch); err != nil {
+		t.Fatalf("triggering: %v", err)
+	}
+}
+
+func expectExit(t *testing.T, ch chan struct{}) {
+	if err := expectChanMsg(ch); err != nil {
+		t.Fatalf("exiting: %v", err)
+	}
+}
+
+func expectChanMsg(ch chan struct{}) error {
 	select {
 	case <-ch:
-		return
+		return nil
 	case <-time.After(timeout):
-		t.Fatalf("Did not get trigger in time")
+		return fmt.Errorf("did not get message in time")
 	}
 }
 
@@ -149,4 +226,30 @@ func (fsw *mockFSWatcher) Init(rdirs, dirs []string) (chan error, chan struct{})
 
 func (fsw *mockFSWatcher) Run() (chan struct{}, chan string, chan error) {
 	return fsw.runTriggerCh, fsw.runEventCh, fsw.runErrCh
+}
+
+// PSScanner
+
+type mockPSScanner struct {
+	runTriggerCh chan struct{}
+	runEventCh   chan string
+	runErrCh     chan error
+	numRefreshes int
+}
+
+func newMockPSScanner() *mockPSScanner {
+	return &mockPSScanner{}
+}
+
+func (pss *mockPSScanner) Run(triggerCh chan struct{}) (chan string, chan error) {
+	pss.runTriggerCh = triggerCh
+	pss.runEventCh = make(chan string)
+	pss.runErrCh = make(chan error)
+
+	go func() {
+		<-pss.runTriggerCh
+		pss.numRefreshes++ // count number of times we refreshed
+	}()
+
+	return pss.runEventCh, pss.runErrCh
 }
