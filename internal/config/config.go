@@ -1,12 +1,17 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type Config struct {
-	RDirs []string
-	Dirs  []string
-	LogFS bool
-	LogPS bool
+	RDirs        []string
+	Dirs         []string
+	LogFS        bool
+	LogPS        bool
+	DrainFor     time.Duration
+	TriggerEvery time.Duration
 }
 
 func (c Config) String() string {

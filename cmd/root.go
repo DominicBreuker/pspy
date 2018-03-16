@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/dominicbreuker/pspy/internal/config"
 	"github.com/dominicbreuker/pspy/internal/fswatcher"
@@ -69,10 +70,12 @@ func root(cmd *cobra.Command, args []string) {
 	logger := logging.NewLogger()
 
 	cfg := &config.Config{
-		RDirs: rDirs,
-		Dirs:  dirs,
-		LogPS: logPS,
-		LogFS: logFS,
+		RDirs:        rDirs,
+		Dirs:         dirs,
+		LogPS:        logPS,
+		LogFS:        logFS,
+		DrainFor:     1 * time.Second,
+		TriggerEvery: 100 * time.Millisecond,
 	}
 	fsw := fswatcher.NewFSWatcher()
 	defer fsw.Close()
