@@ -29,7 +29,7 @@ var bannerLines = []string{
 
 var helpText = `
 pspy monitors the system for file system events and new processes.
-It prints out these envents to the console.
+It prints these envents to the console.
 File system events are monitored with inotify.
 Processes are monitored by scanning /proc, using file system events as triggers.
 pspy does not require root permissions do operate.
@@ -56,12 +56,14 @@ var defaultRDirs = []string{
 	"/opt",
 }
 var defaultDirs = []string{}
+var triggerInterval int
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&logPS, "procevents", "p", true, "print new processes to stdout")
 	rootCmd.PersistentFlags().BoolVarP(&logFS, "fsevents", "f", false, "print file system events to stdout")
 	rootCmd.PersistentFlags().StringArrayVarP(&rDirs, "recursive_dirs", "r", defaultRDirs, "watch these dirs recursively")
 	rootCmd.PersistentFlags().StringArrayVarP(&dirs, "dirs", "d", defaultDirs, "watch these dirs")
+	rootCmd.PersistentFlags().IntVarP(&triggerInterval, "interval", "i", 100, "scan every 'interval' milliseconds for new processes")
 
 	log.SetOutput(os.Stdout)
 }
@@ -75,7 +77,7 @@ func root(cmd *cobra.Command, args []string) {
 		LogPS:        logPS,
 		LogFS:        logFS,
 		DrainFor:     1 * time.Second,
-		TriggerEvery: 100 * time.Millisecond,
+		TriggerEvery: time.Duration(triggerInterval) * time.Millisecond,
 	}
 	fsw := fswatcher.NewFSWatcher()
 	defer fsw.Close()

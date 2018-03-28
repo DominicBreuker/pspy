@@ -15,5 +15,5 @@ type Config struct {
 }
 
 func (c Config) String() string {
-	return fmt.Sprintf("Printing events: processes=%t | file-system-events=%t ||| Watching directories: %+v (recursive) | %+v (non-recursive)", c.LogPS, c.LogFS, c.RDirs, c.Dirs)
+	return fmt.Sprintf("Printing events: processes=%t | file-system-events=%t ||| Scannning for processes every %v and on inotify events ||| Watching directories: %+v (recursive) | %+v (non-recursive)", c.LogPS, c.LogFS, c.TriggerEvery, c.RDirs, c.Dirs)
 }
