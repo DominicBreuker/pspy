@@ -45,6 +45,8 @@ func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} 
 
 func printOutput(cfg *config.Config, b *Bindings, sigCh chan os.Signal, fsEventCh chan string, psEventCh chan string) chan struct{} {
 	exit := make(chan struct{})
+	fsEventColor, psEventColor := getColors(cfg.Colored)
+
 	go func() {
 		for {
 			select {
@@ -53,16 +55,27 @@ func printOutput(cfg *config.Config, b *Bindings, sigCh chan os.Signal, fsEventC
 				exit <- struct{}{}
 			case fe := <-fsEventCh:
 				if cfg.LogFS {
-					b.Logger.Eventf(logging.ColorGreen, "FS: %+v", fe)
+					b.Logger.Eventf(fsEventColor, "FS: %+v", fe)
 				}
 			case pe := <-psEventCh:
 				if cfg.LogPS {
-					b.Logger.Eventf(logging.ColorRed, "CMD: %+v", pe)
+					b.Logger.Eventf(psEventColor, "CMD: %+v", pe)
 				}
 			}
 		}
 	}()
 	return exit
+}
+
+func getColors(colored bool) (fsEventColor int, psEventColor int) {
+	if colored {
+		fsEventColor = logging.ColorGreen
+		psEventColor = logging.ColorRed
+	} else {
+		fsEventColor = logging.ColorNone
+		psEventColor = logging.ColorNone
+	}
+	return
 }
 
 func initFSW(fsw FSWatcher, rdirs, dirs []string, logger Logger) {

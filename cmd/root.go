@@ -57,6 +57,7 @@ var defaultRDirs = []string{
 }
 var defaultDirs = []string{}
 var triggerInterval int
+var colored bool
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&logPS, "procevents", "p", true, "print new processes to stdout")
@@ -64,6 +65,7 @@ func init() {
 	rootCmd.PersistentFlags().StringArrayVarP(&rDirs, "recursive_dirs", "r", defaultRDirs, "watch these dirs recursively")
 	rootCmd.PersistentFlags().StringArrayVarP(&dirs, "dirs", "d", defaultDirs, "watch these dirs")
 	rootCmd.PersistentFlags().IntVarP(&triggerInterval, "interval", "i", 100, "scan every 'interval' milliseconds for new processes")
+	rootCmd.PersistentFlags().BoolVarP(&colored, "color", "c", true, "color the printed events")
 
 	log.SetOutput(os.Stdout)
 }
@@ -78,6 +80,7 @@ func root(cmd *cobra.Command, args []string) {
 		LogFS:        logFS,
 		DrainFor:     1 * time.Second,
 		TriggerEvery: time.Duration(triggerInterval) * time.Millisecond,
+		Colored:      colored,
 	}
 	fsw := fswatcher.NewFSWatcher()
 	defer fsw.Close()
