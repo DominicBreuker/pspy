@@ -29,6 +29,12 @@ type PSScanner interface {
 	Run(triggerCh chan struct{}) (chan string, chan error)
 }
 
+type chans struct {
+	sigCh     chan os.Signal
+	fsEventCh chan string
+	psEventCh chan string
+}
+
 func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} {
 	b.Logger.Infof("Config: %+v", cfg)
 
@@ -39,25 +45,30 @@ func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} 
 
 	triggerEvery(100*time.Millisecond, triggerCh)
 
-	exit := printOutput(cfg, b, sigCh, fsEventCh, psEventCh)
+	chans := &chans{
+		sigCh:     sigCh,
+		fsEventCh: fsEventCh,
+		psEventCh: psEventCh,
+	}
+	exit := printOutput(cfg, b, chans)
 	return exit
 }
 
-func printOutput(cfg *config.Config, b *Bindings, sigCh chan os.Signal, fsEventCh chan string, psEventCh chan string) chan struct{} {
+func printOutput(cfg *config.Config, b *Bindings, chans *chans) chan struct{} {
 	exit := make(chan struct{})
 	fsEventColor, psEventColor := getColors(cfg.Colored)
 
 	go func() {
 		for {
 			select {
-			case se := <-sigCh:
+			case se := <-chans.sigCh:
 				b.Logger.Infof("Exiting program... (%s)", se)
 				exit <- struct{}{}
-			case fe := <-fsEventCh:
+			case fe := <-chans.fsEventCh:
 				if cfg.LogFS {
 					b.Logger.Eventf(fsEventColor, "FS: %+v", fe)
 				}
-			case pe := <-psEventCh:
+			case pe := <-chans.psEventCh:
 				if cfg.LogPS {
 					b.Logger.Eventf(psEventColor, "CMD: %+v", pe)
 				}
