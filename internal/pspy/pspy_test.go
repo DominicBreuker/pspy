@@ -67,6 +67,24 @@ func TestStartPSS(t *testing.T) {
 	expectMessage(t, l.Error, "ERROR: error during refresh")
 }
 
+func TestGetColors(t *testing.T) {
+	tests := []struct {
+		colored      bool
+		fsEventColor int
+		psEventColor int
+	}{
+		{colored: true, fsEventColor: logging.ColorGreen, psEventColor: logging.ColorRed},
+		{colored: false, fsEventColor: logging.ColorNone, psEventColor: logging.ColorNone},
+	}
+
+	for _, tt := range tests {
+		c1, c2 := getColors(tt.colored)
+		if c1 != tt.fsEventColor || c2 != tt.psEventColor {
+			t.Errorf("Got wrong colors when colored=%t: expected %d, %d but got %d, %d", tt.colored, tt.fsEventColor, tt.psEventColor, c1, c2)
+		}
+	}
+}
+
 func TestStart(t *testing.T) {
 	drainFor := 10 * time.Millisecond
 	triggerEvery := 999 * time.Second
@@ -86,6 +104,7 @@ func TestStart(t *testing.T) {
 		LogPS:        true,
 		DrainFor:     drainFor,
 		TriggerEvery: triggerEvery,
+		Colored:      true,
 	}
 	sigCh := make(chan os.Signal)
 
@@ -101,7 +120,7 @@ func TestStart(t *testing.T) {
 	}()
 
 	exitCh := Start(cfg, b, sigCh)
-	expectMessage(t, l.Info, "Config: Printing events: processes=true | file-system-events=true ||| Scannning for processes every 16m39s and on inotify events ||| Watching directories: [rdir1 rdir2] (recursive) | [dir1 dir2] (non-recursive)")
+	expectMessage(t, l.Info, "Config: Printing events (colored=true): processes=true | file-system-events=true ||| Scannning for processes every 16m39s and on inotify events ||| Watching directories: [rdir1 rdir2] (recursive) | [dir1 dir2] (non-recursive)")
 	expectMessage(t, l.Info, "Draining file system events due to startup...")
 	<-time.After(2 * drainFor)
 	expectMessage(t, l.Info, "done")
