@@ -18,10 +18,15 @@ Inotify watchers placed on selected parts of the file system trigger these scans
 ## Getting started
 
 Get the tool onto the Linux machine you want to inspect.
-You must choose between the 32 and 64 bit versions.
-The files are (for now) in the `/bin` folder of this repository.
-- 32 bit version: [download](bin/pspy32)
-- 64 bit version: [download](bin/pspy64)
+First get the binaries.
+
+You can build them yourself by running `make build-build-image` to build a docker image used in `make build` to build four binaries:
+- 32 bit big, static version: `pspy32`
+- 64 bit big, static version: `pspy64`
+- 32 bit small version: `pspy32s`
+- 64 bit small version: `pspy64s`
+The statically compiled files should work on any Linux system but are quite huge (~4MB).
+If size is an issue, try the smaller versions which depend on libc and are compressed with UPX (<1MB).
 
 You can run `pspy --help` to learn about the flags and their meaning.
 The summary is as follows:
