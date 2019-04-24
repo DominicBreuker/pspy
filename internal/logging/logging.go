@@ -16,13 +16,15 @@ type Logger struct {
 	infoLogger  *log.Logger
 	errorLogger *log.Logger
 	eventLogger *log.Logger
+	debug       bool
 }
 
-func NewLogger() *Logger {
+func NewLogger(debug bool) *Logger {
 	return &Logger{
 		infoLogger:  log.New(os.Stdout, "", 0),
 		errorLogger: log.New(os.Stderr, "", 0),
 		eventLogger: log.New(os.Stdout, "", log.Ldate|log.Ltime),
+		debug:       debug,
 	}
 }
 
@@ -32,8 +34,10 @@ func (l *Logger) Infof(format string, v ...interface{}) {
 }
 
 // Errorf writes an error message to stderr
-func (l *Logger) Errorf(format string, v ...interface{}) {
-	l.errorLogger.Printf(format, v...)
+func (l *Logger) Errorf(debug bool, format string, v ...interface{}) {
+	if l.debug == debug {
+		l.errorLogger.Printf(format, v...)
+	}
 }
 
 // Eventf writes an event with timestamp to stdout

@@ -190,6 +190,7 @@ type mockLogger struct {
 	Info  chan string
 	Error chan string
 	Event chan string
+	Debug bool
 }
 
 func newMockLogger() *mockLogger {
@@ -197,6 +198,7 @@ func newMockLogger() *mockLogger {
 		Info:  make(chan string, 10),
 		Error: make(chan string, 10),
 		Event: make(chan string, 10),
+		Debug: true,
 	}
 }
 
@@ -204,8 +206,10 @@ func (l *mockLogger) Infof(format string, v ...interface{}) {
 	l.Info <- fmt.Sprintf(format, v...)
 }
 
-func (l *mockLogger) Errorf(format string, v ...interface{}) {
-	l.Error <- fmt.Sprintf(format, v...)
+func (l *mockLogger) Errorf(debug bool, format string, v ...interface{}) {
+	if l.Debug == debug {
+		l.Error <- fmt.Sprintf(format, v...)
+	}
 }
 
 func (l *mockLogger) Eventf(color int, format string, v ...interface{}) {

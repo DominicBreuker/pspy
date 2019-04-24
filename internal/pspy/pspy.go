@@ -16,7 +16,7 @@ type Bindings struct {
 
 type Logger interface {
 	Infof(format string, v ...interface{})
-	Errorf(format string, v ...interface{})
+	Errorf(debug bool, format string, v ...interface{})
 	Eventf(color int, format string, v ...interface{})
 }
 
@@ -96,7 +96,7 @@ func initFSW(fsw FSWatcher, rdirs, dirs []string, logger Logger) {
 		case <-doneCh:
 			return
 		case err := <-errCh:
-			logger.Errorf("initializing fs watcher: %v", err)
+			logger.Errorf(true, "initializing fs watcher: %v", err)
 		}
 	}
 }
@@ -130,7 +130,7 @@ func triggerEvery(d time.Duration, triggerCh chan struct{}) {
 func logErrors(errCh chan error, logger Logger) {
 	for {
 		err := <-errCh
-		logger.Errorf("ERROR: %v", err)
+		logger.Errorf(true, "ERROR: %v", err)
 	}
 }
 
