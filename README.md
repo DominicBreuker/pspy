@@ -17,16 +17,22 @@ Inotify watchers placed on selected parts of the file system trigger these scans
 
 ## Getting started
 
-Get the tool onto the Linux machine you want to inspect.
-First get the binaries.
+### Download
 
-You can build them yourself by running `make build-build-image` to build a docker image used in `make build` to build four binaries:
-- 32 bit big, static version: `pspy32`
-- 64 bit big, static version: `pspy64`
-- 32 bit small version: `pspy32s`
-- 64 bit small version: `pspy64s`
+Get the tool onto the Linux machine you want to inspect.
+First get the binaries. Download the released binaries here:
+- 32 bit big, static version: `pspy32` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.0.0/pspy32)
+- 64 bit big, static version: `pspy64` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.0.0/pspy64)
+- 32 bit small version: `pspy32s` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.0.0/pspy32s)
+- 64 bit small version: `pspy64s` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.0.0/pspy64s)
+
 The statically compiled files should work on any Linux system but are quite huge (~4MB).
 If size is an issue, try the smaller versions which depend on libc and are compressed with UPX (<1MB).
+
+### Build
+
+Either use Go installed on your system or run the Docker-based build process which ran to create the release.
+For the latter, ensure Docker is installed, and then run `make build-build-image` to build a Docker image, followed by `make build` to build the binaries with it.
 
 You can run `pspy --help` to learn about the flags and their meaning.
 The summary is as follows:
