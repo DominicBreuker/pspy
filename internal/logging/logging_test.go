@@ -33,6 +33,7 @@ var logTests = []struct {
 func TestLogging(t *testing.T) {
 	for i, tt := range logTests {
 		actual := captureOutput(tt.logger, tt.test)
+		log.Printf("OUT: %s", actual)
 
 		// check colors and remove afterwards
 		colors := ansiMatcher.FindAll(actual, 2)
@@ -54,4 +55,47 @@ func captureOutput(logger *log.Logger, f func()) []byte {
 	logger.SetOutput(&buf)
 	f()
 	return buf.Bytes()
+}
+
+func TestGetColorByUID(t *testing.T) {
+	tests := []struct {
+		uid   int
+		color int
+	}{
+		{uid: 0, color: 4},
+		{uid: 1, color: 5},
+		{uid: 2, color: 2},
+		{uid: 3, color: 3},
+		{uid: 99999999999, color: 5},
+	}
+
+	for _, tt := range tests {
+		color := GetColorByUID(tt.uid)
+		if color != tt.color {
+			t.Errorf("GetColorByUID(%d)=%d but want %d", tt.uid, color, tt.color)
+		}
+	}
+
+	minColor := 9999999
+	maxColor := -9999999
+	for i := 0; i < 1000; i++ {
+		color := GetColorByUID(i)
+		if color < 1 || color > ColorTeal {
+			t.Fatalf("GetColorByUID(%d)=%d but this is out of range [%d, %d]", i, color, ColorRed, ColorTeal)
+		}
+
+		if color < minColor {
+			minColor = color
+		}
+		if color > maxColor {
+			maxColor = color
+		}
+	}
+
+	if minColor != 1 {
+		t.Errorf("GetColorByUID returned minimum color %d, not %d, on 1000 trials, which is extremely unlikely", minColor, 1)
+	}
+	if maxColor != ColorTeal {
+		t.Errorf("GetColorByUID returned maximum color %d, not %d, on 1000 trials, which is extremely unlikely", maxColor, ColorTeal)
+	}
 }

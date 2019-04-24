@@ -68,24 +68,6 @@ func TestStartPSS(t *testing.T) {
 	expectMessage(t, l.Error, "ERROR: error during refresh")
 }
 
-func TestGetColors(t *testing.T) {
-	tests := []struct {
-		colored      bool
-		fsEventColor int
-		psEventColor int
-	}{
-		{colored: true, fsEventColor: logging.ColorGreen, psEventColor: logging.ColorRed},
-		{colored: false, fsEventColor: logging.ColorNone, psEventColor: logging.ColorNone},
-	}
-
-	for _, tt := range tests {
-		c1, c2 := getColors(tt.colored)
-		if c1 != tt.fsEventColor || c2 != tt.psEventColor {
-			t.Errorf("Got wrong colors when colored=%t: expected %d, %d but got %d, %d", tt.colored, tt.fsEventColor, tt.psEventColor, c1, c2)
-		}
-	}
-}
-
 func TestStart(t *testing.T) {
 	drainFor := 10 * time.Millisecond
 	triggerEvery := 999 * time.Second
@@ -126,9 +108,9 @@ func TestStart(t *testing.T) {
 	<-time.After(2 * drainFor)
 	expectMessage(t, l.Info, "done")
 	expectTrigger(t, pss.runTriggerCh) // pss receives triggers from fsw
-	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: UID=1000 PID=12345  | pss event", logging.ColorRed))
+	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: UID=1000 PID=12345  | pss event", logging.ColorPurple))
 	expectMessage(t, l.Error, "ERROR: pss error")
-	expectMessage(t, l.Event, fmt.Sprintf("%d FS: fsw event", logging.ColorGreen))
+	expectMessage(t, l.Event, fmt.Sprintf("%d FS: fsw event", logging.ColorNone))
 	expectMessage(t, l.Error, "ERROR: fsw error")
 	expectMessage(t, l.Info, "Exiting program... (interrupt)")
 
