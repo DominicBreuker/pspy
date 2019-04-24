@@ -48,7 +48,7 @@ func TestRun(t *testing.T) {
 			case <-time.After(timeout):
 				t.Errorf("did not receive event in time")
 			case e := <-eventCh:
-				if e != tt.events[i] {
+				if e.String() != tt.events[i] {
 					t.Errorf("Wrong event received: got '%s' but wanted '%s'", e, tt.events[i])
 				}
 			case err := <-errCh:

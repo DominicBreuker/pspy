@@ -6,6 +6,7 @@ import (
 
 	"github.com/dominicbreuker/pspy/internal/config"
 	"github.com/dominicbreuker/pspy/internal/logging"
+	"github.com/dominicbreuker/pspy/internal/psscanner"
 )
 
 type Bindings struct {
@@ -26,13 +27,13 @@ type FSWatcher interface {
 }
 
 type PSScanner interface {
-	Run(triggerCh chan struct{}) (chan string, chan error)
+	Run(triggerCh chan struct{}) (chan psscanner.PSEvent, chan error)
 }
 
 type chans struct {
 	sigCh     chan os.Signal
 	fsEventCh chan string
-	psEventCh chan string
+	psEventCh chan psscanner.PSEvent
 }
 
 func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} {
@@ -112,7 +113,7 @@ func startFSW(fsw FSWatcher, logger Logger, drainFor time.Duration) (triggerCh c
 	return triggerCh, fsEventCh
 }
 
-func startPSS(pss PSScanner, logger Logger, triggerCh chan struct{}) (psEventCh chan string) {
+func startPSS(pss PSScanner, logger Logger, triggerCh chan struct{}) (psEventCh chan psscanner.PSEvent) {
 	psEventCh, errCh := pss.Run(triggerCh)
 	go logErrors(errCh, logger)
 	return psEventCh

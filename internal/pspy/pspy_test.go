@@ -9,6 +9,7 @@ import (
 
 	"github.com/dominicbreuker/pspy/internal/config"
 	"github.com/dominicbreuker/pspy/internal/logging"
+	"github.com/dominicbreuker/pspy/internal/psscanner"
 )
 
 func TestInitFSW(t *testing.T) {
@@ -112,7 +113,7 @@ func TestStart(t *testing.T) {
 		close(fsw.initDoneCh)
 		<-time.After(2 * drainFor)
 		fsw.runTriggerCh <- struct{}{}
-		pss.runEventCh <- "pss event"
+		pss.runEventCh <- psscanner.PSEvent{UID: 1000, PID: 12345, CMD: "pss event"}
 		pss.runErrCh <- errors.New("pss error")
 		fsw.runEventCh <- "fsw event"
 		fsw.runErrCh <- errors.New("fsw error")
@@ -125,7 +126,7 @@ func TestStart(t *testing.T) {
 	<-time.After(2 * drainFor)
 	expectMessage(t, l.Info, "done")
 	expectTrigger(t, pss.runTriggerCh) // pss receives triggers from fsw
-	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: pss event", logging.ColorRed))
+	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: UID=1000 PID=12345  | pss event", logging.ColorRed))
 	expectMessage(t, l.Error, "ERROR: pss error")
 	expectMessage(t, l.Event, fmt.Sprintf("%d FS: fsw event", logging.ColorGreen))
 	expectMessage(t, l.Error, "ERROR: fsw error")
@@ -255,7 +256,7 @@ func (fsw *mockFSWatcher) Run() (chan struct{}, chan string, chan error) {
 
 type mockPSScanner struct {
 	runTriggerCh chan struct{}
-	runEventCh   chan string
+	runEventCh   chan psscanner.PSEvent
 	runErrCh     chan error
 	numRefreshes int
 }
@@ -264,9 +265,9 @@ func newMockPSScanner() *mockPSScanner {
 	return &mockPSScanner{}
 }
 
-func (pss *mockPSScanner) Run(triggerCh chan struct{}) (chan string, chan error) {
+func (pss *mockPSScanner) Run(triggerCh chan struct{}) (chan psscanner.PSEvent, chan error) {
 	pss.runTriggerCh = triggerCh
-	pss.runEventCh = make(chan string)
+	pss.runEventCh = make(chan psscanner.PSEvent)
 	pss.runErrCh = make(chan error)
 
 	go func() {
