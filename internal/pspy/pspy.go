@@ -6,6 +6,7 @@ import (
 
 	"github.com/dominicbreuker/pspy/internal/config"
 	"github.com/dominicbreuker/pspy/internal/logging"
+	"github.com/dominicbreuker/pspy/internal/psscanner"
 )
 
 type Bindings struct {
@@ -16,7 +17,7 @@ type Bindings struct {
 
 type Logger interface {
 	Infof(format string, v ...interface{})
-	Errorf(format string, v ...interface{})
+	Errorf(debug bool, format string, v ...interface{})
 	Eventf(color int, format string, v ...interface{})
 }
 
@@ -26,13 +27,13 @@ type FSWatcher interface {
 }
 
 type PSScanner interface {
-	Run(triggerCh chan struct{}) (chan string, chan error)
+	Run(triggerCh chan struct{}) (chan psscanner.PSEvent, chan error)
 }
 
 type chans struct {
 	sigCh     chan os.Signal
 	fsEventCh chan string
-	psEventCh chan string
+	psEventCh chan psscanner.PSEvent
 }
 
 func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} {
@@ -56,7 +57,7 @@ func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} 
 
 func printOutput(cfg *config.Config, b *Bindings, chans *chans) chan struct{} {
 	exit := make(chan struct{})
-	fsEventColor, psEventColor := getColors(cfg.Colored)
+	// fsEventColor, psEventColor := getColors(cfg.Colored)
 
 	go func() {
 		for {
@@ -66,27 +67,20 @@ func printOutput(cfg *config.Config, b *Bindings, chans *chans) chan struct{} {
 				exit <- struct{}{}
 			case fe := <-chans.fsEventCh:
 				if cfg.LogFS {
-					b.Logger.Eventf(fsEventColor, "FS: %+v", fe)
+					b.Logger.Eventf(logging.ColorNone, "FS: %+v", fe)
 				}
 			case pe := <-chans.psEventCh:
 				if cfg.LogPS {
-					b.Logger.Eventf(psEventColor, "CMD: %+v", pe)
+					color := logging.ColorNone
+					if cfg.Colored {
+						color = logging.GetColorByUID(pe.UID)
+					}
+					b.Logger.Eventf(color, "CMD: %+v", pe)
 				}
 			}
 		}
 	}()
 	return exit
-}
-
-func getColors(colored bool) (fsEventColor int, psEventColor int) {
-	if colored {
-		fsEventColor = logging.ColorGreen
-		psEventColor = logging.ColorRed
-	} else {
-		fsEventColor = logging.ColorNone
-		psEventColor = logging.ColorNone
-	}
-	return
 }
 
 func initFSW(fsw FSWatcher, rdirs, dirs []string, logger Logger) {
@@ -96,7 +90,7 @@ func initFSW(fsw FSWatcher, rdirs, dirs []string, logger Logger) {
 		case <-doneCh:
 			return
 		case err := <-errCh:
-			logger.Errorf("initializing fs watcher: %v", err)
+			logger.Errorf(true, "initializing fs watcher: %v", err)
 		}
 	}
 }
@@ -112,7 +106,7 @@ func startFSW(fsw FSWatcher, logger Logger, drainFor time.Duration) (triggerCh c
 	return triggerCh, fsEventCh
 }
 
-func startPSS(pss PSScanner, logger Logger, triggerCh chan struct{}) (psEventCh chan string) {
+func startPSS(pss PSScanner, logger Logger, triggerCh chan struct{}) (psEventCh chan psscanner.PSEvent) {
 	psEventCh, errCh := pss.Run(triggerCh)
 	go logErrors(errCh, logger)
 	return psEventCh
@@ -130,7 +124,7 @@ func triggerEvery(d time.Duration, triggerCh chan struct{}) {
 func logErrors(errCh chan error, logger Logger) {
 	for {
 		err := <-errCh
-		logger.Errorf("ERROR: %v", err)
+		logger.Errorf(true, "ERROR: %v", err)
 	}
 }
 

@@ -136,14 +136,14 @@ func TestGetUID(t *testing.T) {
 		pid     int
 		stat    []byte
 		statErr error
-		uid     string
+		uid     int
 		err     string
 	}{
-		{pid: 7, stat: completeStatus, statErr: nil, uid: "0", err: ""},                                         // can read normal stat
-		{pid: 7, stat: uidLineBroken, statErr: nil, uid: "", err: "uid line read incomplete"},                   // errors on incomplete Uid line
-		{pid: 7, stat: notEnoughLines, statErr: nil, uid: "", err: "no uid information"},                        // errors for insufficient lines
-		{pid: 7, stat: []byte(""), statErr: nil, uid: "", err: "no uid information"},                            // errors for insufficient lines
-		{pid: 7, stat: []byte(""), statErr: errors.New("file-system-error"), uid: "", err: "file-system-error"}, // returns file system errors
+		{pid: 7, stat: completeStatus, statErr: nil, uid: 0, err: ""},                                           // can read normal stat
+		{pid: 7, stat: uidLineBroken, statErr: nil, uid: -1, err: "uid line read incomplete"},                   // errors on incomplete Uid line
+		{pid: 7, stat: notEnoughLines, statErr: nil, uid: -1, err: "no uid information"},                        // errors for insufficient lines
+		{pid: 7, stat: []byte(""), statErr: nil, uid: -1, err: "no uid information"},                            // errors for insufficient lines
+		{pid: 7, stat: []byte(""), statErr: errors.New("file-system-error"), uid: -1, err: "file-system-error"}, // returns file system errors
 	}
 
 	for _, tt := range tests {
@@ -151,7 +151,7 @@ func TestGetUID(t *testing.T) {
 		uid, err := getUID(tt.pid)
 		if uid != tt.uid {
 			fmt.Printf("STAT: %s", tt.stat)
-			t.Errorf("Wrong uid returned: got %s but want %s", uid, tt.uid)
+			t.Errorf("Wrong uid returned: got %d but want %d", uid, tt.uid)
 		}
 		if (err != nil || tt.err != "") && fmt.Sprintf("%v", err) != tt.err {
 			t.Errorf("Wrong error returned: got %v but want %s", err, tt.err)
@@ -174,18 +174,18 @@ func mockProcStatusReader(stat []byte, err error) (restore func()) {
 
 func TestRefresh(t *testing.T) {
 	tests := []struct {
-		eventCh   chan string
+		eventCh   chan PSEvent
 		pl        procList
 		newPids   []int
 		pidsAfter []int
 		events    []string
 	}{
-		{eventCh: make(chan string), pl: procList{}, newPids: []int{1, 2, 3}, pidsAfter: []int{3, 2, 1}, events: []string{
+		{eventCh: make(chan PSEvent), pl: procList{}, newPids: []int{1, 2, 3}, pidsAfter: []int{3, 2, 1}, events: []string{
 			"UID=???  PID=3      | the-command",
 			"UID=???  PID=2      | the-command",
 			"UID=???  PID=1      | the-command",
 		}},
-		{eventCh: make(chan string), pl: procList{1: "pid-found-before"}, newPids: []int{1, 2, 3}, pidsAfter: []int{1, 3, 2}, events: []string{
+		{eventCh: make(chan PSEvent), pl: procList{1: "pid-found-before"}, newPids: []int{1, 2, 3}, pidsAfter: []int{1, 3, 2}, events: []string{
 			"UID=???  PID=3      | the-command",
 			"UID=???  PID=2      | the-command",
 		}}, // no events emitted for PIDs already known
@@ -200,7 +200,7 @@ func TestRefresh(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			for e := range tt.eventCh {
-				events = append(events, e)
+				events = append(events, e.String())
 			}
 			done <- struct{}{}
 		}()

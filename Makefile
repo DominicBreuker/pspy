@@ -14,14 +14,10 @@ test:
 	docker build -f $(TEST_DOCKERFILE) -t $(TEST_IMAGE) . 
 	docker run -it --rm $(TEST_IMAGE)
 
-# Build Docker image for development
-# pspy has to run on Linux - use this if you develop on another OS
-dev-build:
-	docker build -f $(DEV_DOCKERFILE) -t $(DEV_IMAGE) .
-
 # Drops you into a shell in the development container and mounts the source code
 # You can edit to source on your host, then run go commans (e.g., `go test ./...`) inside the container
 dev:
+	sh -c "if ! docker image ls | grep '$(DEV_IMAGE)'; then echo 'building dev image'; docker build -f $(DEV_DOCKERFILE) -t $(DEV_IMAGE) .; fi"
 	docker run -it \
 		       --rm \
 			   -v $(PROJECT_DIR):/go/src/github.com/dominicbreuker/pspy \
@@ -37,14 +33,13 @@ example:
 	docker run -it --rm $(EXAMPLE_IMAGE)
 
 
-build-build-image:
-	docker build -f $(BUILD_DOCKERFILE) -t $(BUILD_IMAGE) .
-
 # Build different binaries
 # builds binaries for both 32bit and 64bit systems
 # builds one set of static binaries that should work on any system without dependencies, but are huge
 # builds another set of binaries that are as small as possible, but may not work 
 build:
+	sh -c "if ! docker image ls | grep '$(BUILD_IMAGE)'; then echo 'building build image'; docker build -f $(BUILD_DOCKERFILE) -t $(BUILD_IMAGE) .; fi"
+	docker run -it \
 	mkdir -p $(PROJECT_DIR)/bin
 	docker run -it \
 		       --rm \

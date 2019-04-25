@@ -58,6 +58,7 @@ var defaultRDirs = []string{
 var defaultDirs = []string{}
 var triggerInterval int
 var colored bool
+var debug bool
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&logPS, "procevents", "p", true, "print new processes to stdout")
@@ -66,12 +67,13 @@ func init() {
 	rootCmd.PersistentFlags().StringArrayVarP(&dirs, "dirs", "d", defaultDirs, "watch these dirs")
 	rootCmd.PersistentFlags().IntVarP(&triggerInterval, "interval", "i", 100, "scan every 'interval' milliseconds for new processes")
 	rootCmd.PersistentFlags().BoolVarP(&colored, "color", "c", true, "color the printed events")
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "", false, "print detailed error messages")
 
 	log.SetOutput(os.Stdout)
 }
 
 func root(cmd *cobra.Command, args []string) {
-	logger := logging.NewLogger()
+	logger := logging.NewLogger(debug)
 
 	cfg := &config.Config{
 		RDirs:        rDirs,

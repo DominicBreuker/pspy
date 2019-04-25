@@ -17,6 +17,8 @@ Inotify watchers placed on selected parts of the file system trigger these scans
 
 ## Getting started
 
+### Download
+
 Get the tool onto the Linux machine you want to inspect.
 First get the binaries. Download the released binaries here:
 - 32 bit big, static version: `pspy32` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.0.0/pspy32)
@@ -27,7 +29,8 @@ First get the binaries. Download the released binaries here:
 The statically compiled files should work on any Linux system but are quite huge (~4MB).
 If size is an issue, try the smaller versions which depend on libc and are compressed with UPX (<1MB).
 
-Alternatively, build the binaries yourself.
+### Build
+
 Either use Go installed on your system or run the Docker-based build process which ran to create the release.
 For the latter, ensure Docker is installed, and then run `make build-build-image` to build a Docker image, followed by `make build` to build the binaries with it.
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/dominicbreuker/pspy/internal/config"
 	"github.com/dominicbreuker/pspy/internal/logging"
+	"github.com/dominicbreuker/pspy/internal/psscanner"
 )
 
 func TestInitFSW(t *testing.T) {
@@ -67,24 +68,6 @@ func TestStartPSS(t *testing.T) {
 	expectMessage(t, l.Error, "ERROR: error during refresh")
 }
 
-func TestGetColors(t *testing.T) {
-	tests := []struct {
-		colored      bool
-		fsEventColor int
-		psEventColor int
-	}{
-		{colored: true, fsEventColor: logging.ColorGreen, psEventColor: logging.ColorRed},
-		{colored: false, fsEventColor: logging.ColorNone, psEventColor: logging.ColorNone},
-	}
-
-	for _, tt := range tests {
-		c1, c2 := getColors(tt.colored)
-		if c1 != tt.fsEventColor || c2 != tt.psEventColor {
-			t.Errorf("Got wrong colors when colored=%t: expected %d, %d but got %d, %d", tt.colored, tt.fsEventColor, tt.psEventColor, c1, c2)
-		}
-	}
-}
-
 func TestStart(t *testing.T) {
 	drainFor := 10 * time.Millisecond
 	triggerEvery := 999 * time.Second
@@ -112,7 +95,7 @@ func TestStart(t *testing.T) {
 		close(fsw.initDoneCh)
 		<-time.After(2 * drainFor)
 		fsw.runTriggerCh <- struct{}{}
-		pss.runEventCh <- "pss event"
+		pss.runEventCh <- psscanner.PSEvent{UID: 1000, PID: 12345, CMD: "pss event"}
 		pss.runErrCh <- errors.New("pss error")
 		fsw.runEventCh <- "fsw event"
 		fsw.runErrCh <- errors.New("fsw error")
@@ -125,9 +108,9 @@ func TestStart(t *testing.T) {
 	<-time.After(2 * drainFor)
 	expectMessage(t, l.Info, "done")
 	expectTrigger(t, pss.runTriggerCh) // pss receives triggers from fsw
-	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: pss event", logging.ColorRed))
+	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: UID=1000 PID=12345  | pss event", logging.ColorPurple))
 	expectMessage(t, l.Error, "ERROR: pss error")
-	expectMessage(t, l.Event, fmt.Sprintf("%d FS: fsw event", logging.ColorGreen))
+	expectMessage(t, l.Event, fmt.Sprintf("%d FS: fsw event", logging.ColorNone))
 	expectMessage(t, l.Error, "ERROR: fsw error")
 	expectMessage(t, l.Info, "Exiting program... (interrupt)")
 
@@ -190,6 +173,7 @@ type mockLogger struct {
 	Info  chan string
 	Error chan string
 	Event chan string
+	Debug bool
 }
 
 func newMockLogger() *mockLogger {
@@ -197,6 +181,7 @@ func newMockLogger() *mockLogger {
 		Info:  make(chan string, 10),
 		Error: make(chan string, 10),
 		Event: make(chan string, 10),
+		Debug: true,
 	}
 }
 
@@ -204,8 +189,10 @@ func (l *mockLogger) Infof(format string, v ...interface{}) {
 	l.Info <- fmt.Sprintf(format, v...)
 }
 
-func (l *mockLogger) Errorf(format string, v ...interface{}) {
-	l.Error <- fmt.Sprintf(format, v...)
+func (l *mockLogger) Errorf(debug bool, format string, v ...interface{}) {
+	if l.Debug == debug {
+		l.Error <- fmt.Sprintf(format, v...)
+	}
 }
 
 func (l *mockLogger) Eventf(color int, format string, v ...interface{}) {
@@ -251,7 +238,7 @@ func (fsw *mockFSWatcher) Run() (chan struct{}, chan string, chan error) {
 
 type mockPSScanner struct {
 	runTriggerCh chan struct{}
-	runEventCh   chan string
+	runEventCh   chan psscanner.PSEvent
 	runErrCh     chan error
 	numRefreshes int
 }
@@ -260,9 +247,9 @@ func newMockPSScanner() *mockPSScanner {
 	return &mockPSScanner{}
 }
 
-func (pss *mockPSScanner) Run(triggerCh chan struct{}) (chan string, chan error) {
+func (pss *mockPSScanner) Run(triggerCh chan struct{}) (chan psscanner.PSEvent, chan error) {
 	pss.runTriggerCh = triggerCh
-	pss.runEventCh = make(chan string)
+	pss.runEventCh = make(chan psscanner.PSEvent)
 	pss.runErrCh = make(chan error)
 
 	go func() {

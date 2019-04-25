@@ -25,7 +25,7 @@ var cmdLineReader = func(pid int) ([]byte, error) {
 
 type procList map[int]string
 
-func (pl procList) refresh(eventCh chan string) error {
+func (pl procList) refresh(eventCh chan PSEvent) error {
 	pids, err := getPIDs()
 	if err != nil {
 		return err
@@ -74,16 +74,16 @@ func file2Pid(f os.FileInfo) (int, error) {
 	return pid, nil
 }
 
-func (pl procList) addPid(pid int, eventCh chan string) {
+func (pl procList) addPid(pid int, eventCh chan PSEvent) {
 	cmd, err := getCmd(pid)
 	if err != nil {
 		cmd = "???" // process probably terminated
 	}
 	uid, err := getUID(pid)
 	if err != nil {
-		uid = "???"
+		uid = -1
 	}
-	eventCh <- fmt.Sprintf("UID=%-4s PID=%-6d | %s", uid, pid, cmd)
+	eventCh <- PSEvent{UID: uid, PID: pid, CMD: cmd}
 	pl[pid] = cmd
 }
 
@@ -100,18 +100,26 @@ func getCmd(pid int) (string, error) {
 	return string(cmd), nil
 }
 
-func getUID(pid int) (string, error) {
+func getUID(pid int) (int, error) {
 	stat, err := procStatusReader(pid)
 	if err != nil {
-		return "", err
+		return -1, err
 	}
+
 	lines := strings.Split(string(stat), "\n")
 	if len(lines) < 9 {
-		return "", fmt.Errorf("no uid information")
+		return -1, fmt.Errorf("no uid information")
 	}
+
 	uidL := strings.Split(lines[8], "\t")
 	if len(uidL) < 2 {
-		return "", fmt.Errorf("uid line read incomplete")
+		return -1, fmt.Errorf("uid line read incomplete")
 	}
-	return uidL[1], nil
+
+	uid, err := strconv.Atoi(uidL[1])
+	if err != nil {
+		return -1, fmt.Errorf("converting %s to int: %v", uidL[1], err)
+	}
+
+	return uid, nil
 }
