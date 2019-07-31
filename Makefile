@@ -39,7 +39,7 @@ example:
 # builds another set of binaries that are as small as possible, but may not work 
 build:
 	sh -c "if ! docker image ls | grep '$(BUILD_IMAGE)'; then echo 'building build image'; docker build -f $(BUILD_DOCKERFILE) -t $(BUILD_IMAGE) .; fi"
-	docker run -it \
+
 	mkdir -p $(PROJECT_DIR)/bin
 	docker run -it \
 		       --rm \
