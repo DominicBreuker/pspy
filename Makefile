@@ -17,7 +17,7 @@ test:
 # Drops you into a shell in the development container and mounts the source code
 # You can edit to source on your host, then run go commans (e.g., `go test ./...`) inside the container
 dev:
-	sh -c "if ! docker image ls | grep '$(DEV_IMAGE)'; then echo 'building dev image'; docker build -f $(DEV_DOCKERFILE) -t $(DEV_IMAGE) .; fi"
+	sh -c "if ! docker image ls | grep '$(DEV_IMAGE)' | cut -d ':' -f1; then echo 'building dev image'; docker build -f $(DEV_DOCKERFILE) -t $(DEV_IMAGE) .; fi"
 	docker run -it \
 		       --rm \
 			   -v $(PROJECT_DIR):/go/src/github.com/dominicbreuker/pspy \
@@ -38,7 +38,7 @@ example:
 # builds one set of static binaries that should work on any system without dependencies, but are huge
 # builds another set of binaries that are as small as possible, but may not work 
 build:
-	sh -c "if ! docker image ls | grep '$(BUILD_IMAGE)'; then echo 'building build image'; docker build -f $(BUILD_DOCKERFILE) -t $(BUILD_IMAGE) .; fi"
+	sh -c "if ! docker image ls | grep '$(BUILD_IMAGE)' | cut -d ':' -f1; then echo 'building build image'; docker build -f $(BUILD_DOCKERFILE) -t $(BUILD_IMAGE) .; fi"
 
 	mkdir -p $(PROJECT_DIR)/bin
 	docker run -it \
