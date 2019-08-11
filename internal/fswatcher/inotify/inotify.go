@@ -17,7 +17,8 @@ const maximumWatchersFile = "/proc/sys/fs/inotify/max_user_watches"
 // set to -1 if the number cannot be determined
 var MaxWatchers int = -1
 
-const EventSize int = unix.SizeofInotifyEvent
+// sizeof(struct inotify_event) + NAME_MAX + 1
+const EventSize int = unix.SizeofInotifyEvent + 255 + 1
 
 func init() {
 	mw, err := getMaxWatchers()
@@ -71,7 +72,7 @@ func (i *Inotify) Watch(dir string) error {
 
 func (i *Inotify) Read(buf []byte) (int, error) {
 	n, errno := unix.Read(i.FD, buf)
-	if n < 0 {
+	if n < 1 {
 		return n, fmt.Errorf("reading from inotify fd %d: errno: %d", i.FD, errno)
 	}
 	return n, nil
