@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -70,9 +71,20 @@ func (i *Inotify) Watch(dir string) error {
 	return nil
 }
 
+var errno22Counter = 0
+
 func (i *Inotify) Read(buf []byte) (int, error) {
 	n, errno := unix.Read(i.FD, buf)
 	if n < 1 {
+		if errno.Error() == "invalid argument" {
+			errno22Counter += 1
+			if errno22Counter > 20 {
+				fmt.Printf("Unrecoverable inotify error (%s, errno %d). Exiting program...\n", errno, errno)
+				os.Exit(22)
+			}
+		} else {
+			errno22Counter = 0
+		}
 		return n, fmt.Errorf("reading from inotify fd %d: errno: %d", i.FD, errno)
 	}
 	return n, nil
