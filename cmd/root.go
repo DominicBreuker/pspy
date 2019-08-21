@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -17,15 +16,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var bannerLines = []string{
-	"      _____   _____ _______     __",
-	"     |  __ \\ / ____|  __ \\ \\   / /",
-	"     | |__) | (___ | |__) \\ \\_/ / ",
-	"     |  ___/ \\___ \\|  ___/ \\   /  ",
-	"     | |     ____) | |      | |   ",
-	"     |_|    |_____/|_|      |_|   ",
-	helpText,
-}
+var banner = `
+
+     ██▓███    ██████  ██▓███ ▓██   ██▓
+    ▓██░  ██▒▒██    ▒ ▓██░  ██▒▒██  ██▒
+    ▓██░ ██▓▒░ ▓██▄   ▓██░ ██▓▒ ▒██ ██░
+    ▒██▄█▓▒ ▒  ▒   ██▒▒██▄█▓▒ ▒ ░ ▐██▓░
+    ▒██▒ ░  ░▒██████▒▒▒██▒ ░  ░ ░ ██▒▓░
+    ▒▓▒░ ░  ░▒ ▒▓▒ ▒ ░▒▓▒░ ░  ░  ██▒▒▒ 
+    ░▒ ░     ░ ░▒  ░ ░░▒ ░     ▓██ ░▒░ 
+    ░░       ░  ░  ░  ░░       ▒ ▒ ░░  
+                   ░           ░ ░     
+                               ░ ░     
+
+`
 
 var helpText = `
 pspy monitors the system for file system events and new processes.
@@ -33,10 +37,8 @@ It prints these envents to the console.
 File system events are monitored with inotify.
 Processes are monitored by scanning /proc, using file system events as triggers.
 pspy does not require root permissions do operate.
-Check our https://github.com/dominicbreuker/pspy for more information.
+Check out https://github.com/dominicbreuker/pspy for more information.
 `
-
-var banner = strings.Join(bannerLines, "\n")
 
 var rootCmd = &cobra.Command{
 	Use:   "pspy",
@@ -74,6 +76,8 @@ func init() {
 
 func root(cmd *cobra.Command, args []string) {
 	logger := logging.NewLogger(debug)
+
+	logger.Infof("%s", banner)
 
 	cfg := &config.Config{
 		RDirs:        rDirs,

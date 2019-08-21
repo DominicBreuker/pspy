@@ -1,6 +1,6 @@
 <img src="images/logo.svg" align="left" />
 
-# pspy - unprivileged linux process snooping
+# pspy - unprivileged Linux process snooping
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/DominicBreuker/pspy)](https://goreportcard.com/report/github.com/DominicBreuker/pspy)
 [![Maintainability](https://api.codeclimate.com/v1/badges/23328b2549a76aa11dd5/maintainability)](https://codeclimate.com/github/DominicBreuker/pspy/maintainability)
@@ -12,7 +12,7 @@ It allows you to see commands run by other users, cron jobs, etc. as they execut
 Great for enumeration of Linux systems in CTFs.
 Also great to demonstrate your colleagues why passing secrets as arguments on the command line is a bad idea.
 
-The tool gathers it's info from procfs scans.
+The tool gathers the info from procfs scans.
 Inotify watchers placed on selected parts of the file system trigger these scans to catch short-lived processes.
 
 ## Getting started
@@ -21,13 +21,13 @@ Inotify watchers placed on selected parts of the file system trigger these scans
 
 Get the tool onto the Linux machine you want to inspect.
 First get the binaries. Download the released binaries here:
-- 32 bit big, static version: `pspy32` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.0.0/pspy32)
-- 64 bit big, static version: `pspy64` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.0.0/pspy64)
-- 32 bit small version: `pspy32s` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.0.0/pspy32s)
-- 64 bit small version: `pspy64s` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.0.0/pspy64s)
+- 32 bit big, static version: `pspy32` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.1.0/pspy32)
+- 64 bit big, static version: `pspy64` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.1.0/pspy64)
+- 32 bit small version: `pspy32s` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.1.0/pspy32s)
+- 64 bit small version: `pspy64s` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.1.0/pspy64s)
 
 The statically compiled files should work on any Linux system but are quite huge (~4MB).
-If size is an issue, try the smaller versions which depend on libc and are compressed with UPX (<1MB).
+If size is an issue, try the smaller versions which depend on libc and are compressed with UPX (~1MB).
 
 ### Build
 
