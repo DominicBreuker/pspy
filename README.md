@@ -21,10 +21,10 @@ Inotify watchers placed on selected parts of the file system trigger these scans
 
 Get the tool onto the Linux machine you want to inspect.
 First get the binaries. Download the released binaries here:
-- 32 bit big, static version: `pspy32` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.1.0/pspy32)
-- 64 bit big, static version: `pspy64` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.1.0/pspy64)
-- 32 bit small version: `pspy32s` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.1.0/pspy32s)
-- 64 bit small version: `pspy64s` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.1.0/pspy64s)
+- 32 bit big, static version: `pspy32` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.2.0/pspy32)
+- 64 bit big, static version: `pspy64` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.2.0/pspy64)
+- 32 bit small version: `pspy32s` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.2.0/pspy32s)
+- 64 bit small version: `pspy64s` [download](https://github.com/DominicBreuker/pspy/releases/download/v1.2.0/pspy64s)
 
 The statically compiled files should work on any Linux system but are quite huge (~4MB).
 If size is an issue, try the smaller versions which depend on libc and are compressed with UPX (~1MB).
@@ -41,7 +41,8 @@ The summary is as follows:
 - -r: list of directories to watch with Inotify. pspy will watch all subdirectories recursively (by default, watches /usr, /tmp, /etc, /home, /var, and /opt).
 - -d: list of directories to watch with Inotify. pspy will watch these directories only, not the subdirectories (empty by default).
 - -i: interval in milliseconds between procfs scans. pspy scans regularly for new processes regardless of Inotify events, just in case some events are not received.
-- -c: print events in different colors. Red for new processes, green for new Inotify events.
+- -c: print commands in different colors. File system events are not colored anymore, commands have different colors based on process UID.
+- --debug: prints verbose error messages which are otherwise hidden.
 
 The default settings should be fine for most applications.
 Watching files inside `/usr` is most important since many tools will access libraries inside it.
