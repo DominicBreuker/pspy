@@ -9,6 +9,9 @@ DEV_DOCKERFILE = $(PROJECT_DIR)/docker/Dockerfile.development
 TEST_IMAGE      = local/pspy-testing:latest
 TEST_DOCKERFILE = $(PROJECT_DIR)/docker/Dockerfile.testing
 
+VERSION      = `git describe --tags --always || echo "unknown"`
+BUILD_SHA    = `git rev-parse HEAD || echo "unknown"`
+
 # Run unit test and integration test inside container
 test:
 	docker build -f $(TEST_DOCKERFILE) -t $(TEST_IMAGE) . 
@@ -38,7 +41,7 @@ example:
 # builds one set of static binaries that should work on any system without dependencies, but are huge
 # builds another set of binaries that are as small as possible, but may not work 
 build:
-	sh -c "if ! docker image ls | grep '$(BUILD_IMAGE)' | cut -d ':' -f1; then echo 'building build image'; docker build -f $(BUILD_DOCKERFILE) -t $(BUILD_IMAGE) .; fi"
+	# sh -c "if ! docker image ls | grep '$(BUILD_IMAGE)' | cut -d ':' -f1; then echo 'building build image'; docker build -f $(BUILD_DOCKERFILE) -t $(BUILD_IMAGE) .; fi"
 
 	mkdir -p $(PROJECT_DIR)/bin
 	docker run -it \
@@ -47,8 +50,8 @@ build:
 			   -w "/go/src/github.com/dominicbreuker" \
 			   --env CGO_ENABLED=0 \
 			   --env GOOS=linux \
-			   --env GOARCH=386 \
-	           $(BUILD_IMAGE) /bin/sh -c "go build -a -ldflags '-extldflags \"-static\"' -o pspy/bin/pspy32 pspy/main.go"
+			  --env GOARCH=386 \
+	           $(BUILD_IMAGE) /bin/sh -c "go build -a -ldflags '-s -w -X main.version=${VERSION} -X main.commit=${BUILD_SHA} -extldflags \"-static\"' -o pspy/bin/pspy32 pspy/main.go"
 	docker run -it \
 		       --rm \
 		       -v $(PROJECT_DIR):/go/src/github.com/dominicbreuker/pspy \
@@ -56,18 +59,18 @@ build:
 			   --env CGO_ENABLED=0 \
 			   --env GOOS=linux \
 			   --env GOARCH=amd64 \
-	           $(BUILD_IMAGE) /bin/sh -c "go build -a -ldflags '-extldflags \"-static\"' -o pspy/bin/pspy64 pspy/main.go"
+	           $(BUILD_IMAGE) /bin/sh -c "go build -a -ldflags '-s -w -X main.version=${VERSION} -X main.commit=${BUILD_SHA} -extldflags \"-static\"' -o pspy/bin/pspy64 pspy/main.go"
 	docker run -it \
 		       --rm \
 		       -v $(PROJECT_DIR):/go/src/github.com/dominicbreuker/pspy \
 			   -w "/go/src/github.com/dominicbreuker" \
 			   --env GOOS=linux \
 			   --env GOARCH=386 \
-	           $(BUILD_IMAGE) /bin/sh -c "go build -ldflags '-w -s' -o pspy/bin/pspy32s pspy/main.go && upx pspy/bin/pspy32s"
+	           $(BUILD_IMAGE) /bin/sh -c "go build -ldflags '-w -s -X main.version=${VERSION} -X main.commit=${BUILD_SHA}' -o pspy/bin/pspy32s pspy/main.go && upx pspy/bin/pspy32s"
 	docker run -it \
 		       --rm \
 		       -v $(PROJECT_DIR):/go/src/github.com/dominicbreuker/pspy \
 			   -w "/go/src/github.com/dominicbreuker" \
 			   --env GOOS=linux \
 			   --env GOARCH=amd64 \
-	           $(BUILD_IMAGE) /bin/sh -c "go build -ldflags '-w -s' -o pspy/bin/pspy64s pspy/main.go && upx pspy/bin/pspy64s"
+	           $(BUILD_IMAGE) /bin/sh -c "go build -ldflags '-w -s -X main.version=${VERSION} -X main.commit=${BUILD_SHA}' -o pspy/bin/pspy64s pspy/main.go && upx pspy/bin/pspy64s"
