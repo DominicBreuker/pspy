@@ -95,7 +95,7 @@ func TestStart(t *testing.T) {
 		close(fsw.initDoneCh)
 		<-time.After(2 * drainFor)
 		fsw.runTriggerCh <- struct{}{}
-		pss.runEventCh <- psscanner.PSEvent{UID: 1000, PID: 12345, CMD: "pss event"}
+		pss.runEventCh <- psscanner.PSEvent{UID: 1000, PID: 12345, PPID: 54321, CMD: "pss event"}
 		pss.runErrCh <- errors.New("pss error")
 		fsw.runEventCh <- "fsw event"
 		fsw.runErrCh <- errors.New("fsw error")
@@ -108,7 +108,7 @@ func TestStart(t *testing.T) {
 	<-time.After(2 * drainFor)
 	expectMessage(t, l.Info, "done")
 	expectTrigger(t, pss.runTriggerCh) // pss receives triggers from fsw
-	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: UID=1000 PID=12345  | pss event", logging.ColorPurple))
+	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: UID=1000  PID=12345  PPID=54321  | pss event", logging.ColorPurple))
 	expectMessage(t, l.Error, "ERROR: pss error")
 	expectMessage(t, l.Event, fmt.Sprintf("%d FS: fsw event", logging.ColorNone))
 	expectMessage(t, l.Error, "ERROR: fsw error")

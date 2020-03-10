@@ -61,6 +61,7 @@ var defaultDirs = []string{}
 var triggerInterval int
 var colored bool
 var debug bool
+var ppid bool
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&logPS, "procevents", "p", true, "print new processes to stdout")
@@ -70,6 +71,7 @@ func init() {
 	rootCmd.PersistentFlags().IntVarP(&triggerInterval, "interval", "i", 100, "scan every 'interval' milliseconds for new processes")
 	rootCmd.PersistentFlags().BoolVarP(&colored, "color", "c", true, "color the printed events")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "", false, "print detailed error messages")
+	rootCmd.PersistentFlags().BoolVarP(&ppid, "ppid", "", false, "record process ppids")
 
 	log.SetOutput(os.Stdout)
 }
@@ -91,7 +93,7 @@ func root(cmd *cobra.Command, args []string) {
 	fsw := fswatcher.NewFSWatcher()
 	defer fsw.Close()
 
-	pss := psscanner.NewPSScanner()
+	pss := psscanner.NewPSScanner(ppid)
 
 	sigCh := make(chan os.Signal)
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
