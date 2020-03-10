@@ -38,9 +38,16 @@ type chans struct {
 
 func Start(cfg *config.Config, b *Bindings, sigCh chan os.Signal) chan struct{} {
 	b.Logger.Infof("Config: %+v", cfg)
+	abort := make(chan struct{}, 1)
+	abort <- struct{}{}
 
-	initFSW(b.FSW, cfg.RDirs, cfg.Dirs, b.Logger)
-	triggerCh, fsEventCh := startFSW(b.FSW, b.Logger, cfg.DrainFor)
+	if !initFSW(b.FSW, cfg.RDirs, cfg.Dirs, b.Logger, sigCh) {
+		return abort
+	}
+	triggerCh, fsEventCh, ok := startFSW(b.FSW, b.Logger, cfg.DrainFor, sigCh)
+	if !ok {
+		return abort
+	}
 
 	psEventCh := startPSS(b.PSS, b.Logger, triggerCh)
 
@@ -83,27 +90,29 @@ func printOutput(cfg *config.Config, b *Bindings, chans *chans) chan struct{} {
 	return exit
 }
 
-func initFSW(fsw FSWatcher, rdirs, dirs []string, logger Logger) {
+func initFSW(fsw FSWatcher, rdirs, dirs []string, logger Logger, sigCh <-chan os.Signal) bool {
 	errCh, doneCh := fsw.Init(rdirs, dirs)
 	for {
 		select {
+		case <-sigCh:
+			return false
 		case <-doneCh:
-			return
+			return true
 		case err := <-errCh:
 			logger.Errorf(true, "initializing fs watcher: %v", err)
 		}
 	}
 }
 
-func startFSW(fsw FSWatcher, logger Logger, drainFor time.Duration) (triggerCh chan struct{}, fsEventCh chan string) {
+func startFSW(fsw FSWatcher, logger Logger, drainFor time.Duration, sigCh <-chan os.Signal) (triggerCh chan struct{}, fsEventCh chan string, ok bool) {
 	triggerCh, fsEventCh, errCh := fsw.Run()
 	go logErrors(errCh, logger)
 
 	// ignore all file system events created on startup
 	logger.Infof("Draining file system events due to startup...")
-	drainEventsFor(triggerCh, fsEventCh, drainFor)
+	ok = drainEventsFor(triggerCh, fsEventCh, drainFor, sigCh)
 	logger.Infof("done")
-	return triggerCh, fsEventCh
+	return
 }
 
 func startPSS(pss PSScanner, logger Logger, triggerCh chan struct{}) (psEventCh chan psscanner.PSEvent) {
@@ -128,13 +137,15 @@ func logErrors(errCh chan error, logger Logger) {
 	}
 }
 
-func drainEventsFor(triggerCh chan struct{}, eventCh chan string, d time.Duration) {
+func drainEventsFor(triggerCh chan struct{}, eventCh chan string, d time.Duration, sigCh <-chan os.Signal) bool {
 	for {
 		select {
+		case <-sigCh:
+			return false
 		case <-triggerCh:
 		case <-eventCh:
 		case <-time.After(d):
-			return
+			return true
 		}
 	}
 }
