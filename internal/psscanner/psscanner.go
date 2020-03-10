@@ -2,14 +2,16 @@ package psscanner
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 )
 
 type PSScanner struct {
-	enablePpid bool
-	eventCh    chan<- PSEvent
+	enablePpid   bool
+	eventCh      chan<- PSEvent
+	maxCmdLength int
 }
 
 type PSEvent struct {
@@ -33,10 +35,11 @@ func (evt PSEvent) String() string {
 		"UID=%-5s PID=%-6d PPID=%-6d | %s", uid, evt.PID, evt.PPID, evt.CMD)
 }
 
-func NewPSScanner(ppid bool) *PSScanner {
+func NewPSScanner(ppid bool, cmdLength int) *PSScanner {
 	return &PSScanner{
-		enablePpid: ppid,
-		eventCh:    nil,
+		enablePpid:   ppid,
+		eventCh:      nil,
+		maxCmdLength: cmdLength,
 	}
 }
 
@@ -57,8 +60,8 @@ func (p *PSScanner) Run(triggerCh chan struct{}) (chan PSEvent, chan error) {
 
 func (p *PSScanner) processNewPid(pid int) {
 	// quickly load data into memory before processing it, with preferance for cmd
-	cmdLine, errCmdLine := cmdLineReader(pid)
-	status, errStatus := procStatusReader(pid)
+	cmdLine, errCmdLine := readFile(fmt.Sprintf("/proc/%d/cmdline", pid), p.maxCmdLength)
+	status, errStatus := readFile(fmt.Sprintf("/proc/%d/status", pid), 512)
 
 	cmd := "???" // process probably terminated
 	if errCmdLine == nil {
@@ -114,12 +117,22 @@ func (p *PSScanner) parseProcessStatus(status []byte) (int, int, error) {
 	return uid, ppid, nil
 }
 
-var procStatusReader = func(pid int) ([]byte, error) {
-	statPath := fmt.Sprintf("/proc/%d/status", pid)
-	return ioutil.ReadFile(statPath)
+var open func(string) (io.ReadCloser, error) = func(s string) (io.ReadCloser, error) {
+	return os.Open(s)
 }
 
-var cmdLineReader = func(pid int) ([]byte, error) {
-	cmdPath := fmt.Sprintf("/proc/%d/cmdline", pid)
-	return ioutil.ReadFile(cmdPath)
+// no nonsense file reading
+func readFile(filename string, maxlen int) ([]byte, error) {
+	file, err := open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	buffer := make([]byte, maxlen)
+	n, err := file.Read(buffer)
+	if err != io.EOF && err != nil {
+		return nil, err
+	}
+	return buffer[:n], nil
 }

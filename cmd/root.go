@@ -62,6 +62,7 @@ var triggerInterval int
 var colored bool
 var debug bool
 var ppid bool
+var cmdLength int
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&logPS, "procevents", "p", true, "print new processes to stdout")
@@ -72,6 +73,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&colored, "color", "c", true, "color the printed events")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "", false, "print detailed error messages")
 	rootCmd.PersistentFlags().BoolVarP(&ppid, "ppid", "", false, "record process ppids")
+	rootCmd.PersistentFlags().IntVarP(&cmdLength, "truncate", "t", 2048, "truncate process cmds longer than this")
 
 	log.SetOutput(os.Stdout)
 }
@@ -93,7 +95,7 @@ func root(cmd *cobra.Command, args []string) {
 	fsw := fswatcher.NewFSWatcher()
 	defer fsw.Close()
 
-	pss := psscanner.NewPSScanner(ppid)
+	pss := psscanner.NewPSScanner(ppid, cmdLength)
 
 	sigCh := make(chan os.Signal)
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)

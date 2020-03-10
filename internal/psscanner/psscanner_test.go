@@ -3,6 +3,8 @@ package psscanner
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"io"
 	"reflect"
 	"testing"
 	"time"
@@ -12,54 +14,59 @@ const timeout = 100 * time.Millisecond
 
 func TestRun(t *testing.T) {
 	tests := []struct {
+		name   string
 		pids   []int
 		events []string
 	}{
-		{pids: []int{1, 2, 3}, events: []string{
-			"UID=???   PID=3      | the-command",
-			"UID=???   PID=2      | the-command",
-			"UID=???   PID=1      | the-command",
-		}},
+		{
+			name: "nominal",
+			pids: []int{1, 2, 3},
+			events: []string{
+				"UID=???   PID=3      | the-command",
+				"UID=???   PID=2      | the-command",
+				"UID=???   PID=1      | the-command",
+			},
+		},
 	}
 
 	for _, tt := range tests {
-		restoreGetPIDs := mockPidList(tt.pids)
-		restoreCmdLineReader := mockCmdLineReader([]byte("the-command"), nil)
-		restoreProcStatusReader := mockProcStatusReader([]byte(""), nil) // don't mock read value since it's not worth it
-
-		pss := NewPSScanner(false)
-		triggerCh := make(chan struct{})
-		eventCh, errCh := pss.Run(triggerCh)
-
-		// does nothing without triggering
-		select {
-		case e := <-eventCh:
-			t.Errorf("Received event before trigger: %s", e)
-		case err := <-errCh:
-			t.Errorf("Received error before trigger: %v", err)
-		case <-time.After(timeout):
-			// ok
-		}
-
-		triggerCh <- struct{}{}
-
-		// received event after the trigger
-		for i := 0; i < 3; i++ {
-			select {
-			case <-time.After(timeout):
-				t.Errorf("did not receive event in time")
-			case e := <-eventCh:
-				if e.String() != tt.events[i] {
-					t.Errorf("Wrong event received: got '%s' but wanted '%s'", e, tt.events[i])
-				}
-			case err := <-errCh:
-				t.Errorf("Received unexpected error: %v", err)
+		t.Run(tt.name, func(t *testing.T) {
+			defer mockPidList(tt.pids)()
+			for _, pid := range tt.pids {
+				defer mockPidCmdLine(pid, []byte("the-command"), nil, nil, t)()
+				defer mockPidStatus(pid, []byte{}, nil, nil, t)() // don't mock read value since it's not worth it
 			}
-		}
 
-		restoreProcStatusReader()
-		restoreCmdLineReader()
-		restoreGetPIDs()
+			pss := NewPSScanner(false, 2048)
+			triggerCh := make(chan struct{})
+			eventCh, errCh := pss.Run(triggerCh)
+
+			// does nothing without triggering
+			select {
+			case e := <-eventCh:
+				t.Errorf("Received event before trigger: %s", e)
+			case err := <-errCh:
+				t.Errorf("Received error before trigger: %v", err)
+			case <-time.After(timeout):
+				// ok
+			}
+
+			triggerCh <- struct{}{}
+
+			// received event after the trigger
+			for i := 0; i < 3; i++ {
+				select {
+				case <-time.After(timeout):
+					t.Errorf("did not receive event in time")
+				case e := <-eventCh:
+					if e.String() != tt.events[i] {
+						t.Errorf("Wrong event received: got '%s' but wanted '%s'", e, tt.events[i])
+					}
+				case err := <-errCh:
+					t.Errorf("Received unexpected error: %v", err)
+				}
+			}
+		})
 	}
 }
 
@@ -121,23 +128,29 @@ var notEnoughLines, _ = hex.DecodeString(
 
 func TestProcessNewPid(t *testing.T) {
 	tests := []struct {
-		name       string
-		enablePpid bool
-		pid        int
-		cmdLine    []byte
-		cmdLineErr error
-		status     []byte
-		statusErr  error
-		expected   PSEvent
+		name           string
+		enablePpid     bool
+		truncate       int
+		pid            int
+		cmdLine        []byte
+		cmdLineErrRead error
+		cmdLineErrOpen error
+		status         []byte
+		statusErrRead  error
+		statusErrOpen  error
+		expected       PSEvent
 	}{
 		{
-			name:       "nominal-no-ppid",
-			enablePpid: false,
-			pid:        1,
-			cmdLine:    []byte("abc\x00123"),
-			cmdLineErr: nil,
-			status:     completeStatus,
-			statusErr:  nil,
+			name:           "nominal-no-ppid",
+			enablePpid:     false,
+			truncate:       100,
+			pid:            1,
+			cmdLine:        []byte("abc\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         completeStatus,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  0,
 				PID:  1,
@@ -146,13 +159,16 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "nominal-ppid",
-			enablePpid: true,
-			pid:        1,
-			cmdLine:    []byte("abc\x00123"),
-			cmdLineErr: nil,
-			status:     completeStatus,
-			statusErr:  nil,
+			name:           "nominal-ppid",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            1,
+			cmdLine:        []byte("abc\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         completeStatus,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  0,
 				PID:  1,
@@ -161,13 +177,16 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "empty-cmd-ok",
-			enablePpid: true,
-			pid:        1,
-			cmdLine:    []byte{},
-			cmdLineErr: nil,
-			status:     completeStatus,
-			statusErr:  nil,
+			name:           "empty-cmd-ok",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            1,
+			cmdLine:        []byte{},
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         completeStatus,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  0,
 				PID:  1,
@@ -176,13 +195,34 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "cmd-io-error",
-			enablePpid: true,
-			pid:        2,
-			cmdLine:    nil,
-			cmdLineErr: errors.New("file-system-error"),
-			status:     completeStatus,
-			statusErr:  nil,
+			name:           "cmd-truncate",
+			enablePpid:     false,
+			truncate:       10,
+			pid:            1,
+			cmdLine:        []byte("abc\x00123\x00alpha"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         completeStatus,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
+			expected: PSEvent{
+				UID:  0,
+				PID:  1,
+				PPID: -1,
+				CMD:  "abc 123 al",
+			},
+		},
+		{
+			name:           "cmd-io-error",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            2,
+			cmdLine:        nil,
+			cmdLineErrRead: errors.New("file-system-error"),
+			cmdLineErrOpen: nil,
+			status:         completeStatus,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  0,
 				PID:  2,
@@ -191,13 +231,34 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "status-io-error",
-			enablePpid: true,
-			pid:        2,
-			cmdLine:    []byte("some\x00cmd\x00123"),
-			cmdLineErr: nil,
-			status:     nil,
-			statusErr:  errors.New("file-system-error"),
+			name:           "cmd-io-error2",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            2,
+			cmdLine:        nil,
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: errors.New("file-system-error"),
+			status:         completeStatus,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
+			expected: PSEvent{
+				UID:  0,
+				PID:  2,
+				PPID: 5,
+				CMD:  "???",
+			},
+		},
+		{
+			name:           "status-io-error",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            2,
+			cmdLine:        []byte("some\x00cmd\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         nil,
+			statusErrRead:  errors.New("file-system-error"),
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  -1,
 				PID:  2,
@@ -206,13 +267,34 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "status-too-short",
-			enablePpid: true,
-			pid:        3,
-			cmdLine:    []byte("some\x00cmd\x00123"),
-			cmdLineErr: nil,
-			status:     notEnoughLines,
-			statusErr:  nil,
+			name:           "status-io-error2",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            2,
+			cmdLine:        []byte("some\x00cmd\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         nil,
+			statusErrRead:  nil,
+			statusErrOpen:  errors.New("file-system-error"),
+			expected: PSEvent{
+				UID:  -1,
+				PID:  2,
+				PPID: -1,
+				CMD:  "some cmd 123",
+			},
+		},
+		{
+			name:           "status-too-short",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            3,
+			cmdLine:        []byte("some\x00cmd\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         notEnoughLines,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  -1,
 				PID:  3,
@@ -221,13 +303,16 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "status-empty",
-			enablePpid: true,
-			pid:        3,
-			cmdLine:    []byte("some\x00cmd\x00123"),
-			cmdLineErr: nil,
-			status:     []byte{},
-			statusErr:  nil,
+			name:           "status-empty",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            3,
+			cmdLine:        []byte("some\x00cmd\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         []byte{},
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  -1,
 				PID:  3,
@@ -236,13 +321,16 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "uid-line-too-short",
-			enablePpid: true,
-			pid:        3,
-			cmdLine:    []byte("some\x00cmd\x00123"),
-			cmdLineErr: nil,
-			status:     uidLineBroken,
-			statusErr:  nil,
+			name:           "uid-line-too-short",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            3,
+			cmdLine:        []byte("some\x00cmd\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         uidLineBroken,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  -1,
 				PID:  3,
@@ -251,13 +339,16 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "uid-parse-error",
-			enablePpid: true,
-			pid:        3,
-			cmdLine:    []byte("some\x00cmd\x00123"),
-			cmdLineErr: nil,
-			status:     uidNaN,
-			statusErr:  nil,
+			name:           "uid-parse-error",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            3,
+			cmdLine:        []byte("some\x00cmd\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         uidNaN,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  -1,
 				PID:  3,
@@ -266,13 +357,16 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "ppid-line-too-short",
-			enablePpid: true,
-			pid:        3,
-			cmdLine:    []byte("some\x00cmd\x00123"),
-			cmdLineErr: nil,
-			status:     ppidLineShort,
-			statusErr:  nil,
+			name:           "ppid-line-too-short",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            3,
+			cmdLine:        []byte("some\x00cmd\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         ppidLineShort,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  -1,
 				PID:  3,
@@ -281,13 +375,16 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "ppid-parse-error",
-			enablePpid: true,
-			pid:        3,
-			cmdLine:    []byte("some\x00cmd\x00123"),
-			cmdLineErr: nil,
-			status:     ppidNaN,
-			statusErr:  nil,
+			name:           "ppid-parse-error",
+			enablePpid:     true,
+			truncate:       100,
+			pid:            3,
+			cmdLine:        []byte("some\x00cmd\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         ppidNaN,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  -1,
 				PID:  3,
@@ -296,13 +393,16 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "no-ppid-line-too-short",
-			enablePpid: false,
-			pid:        3,
-			cmdLine:    []byte("some\x00cmd\x00123"),
-			cmdLineErr: nil,
-			status:     ppidLineShort,
-			statusErr:  nil,
+			name:           "no-ppid-line-too-short",
+			enablePpid:     false,
+			truncate:       100,
+			pid:            3,
+			cmdLine:        []byte("some\x00cmd\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         ppidLineShort,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  0,
 				PID:  3,
@@ -311,13 +411,16 @@ func TestProcessNewPid(t *testing.T) {
 			},
 		},
 		{
-			name:       "no-ppid-parse-error",
-			enablePpid: false,
-			pid:        3,
-			cmdLine:    []byte("some\x00cmd\x00123"),
-			cmdLineErr: nil,
-			status:     ppidNaN,
-			statusErr:  nil,
+			name:           "no-ppid-parse-error",
+			enablePpid:     false,
+			truncate:       100,
+			pid:            3,
+			cmdLine:        []byte("some\x00cmd\x00123"),
+			cmdLineErrRead: nil,
+			cmdLineErrOpen: nil,
+			status:         ppidNaN,
+			statusErrRead:  nil,
+			statusErrOpen:  nil,
 			expected: PSEvent{
 				UID:  0,
 				PID:  3,
@@ -329,14 +432,15 @@ func TestProcessNewPid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer mockCmdLineReader(tt.cmdLine, tt.cmdLineErr)()
-			defer mockProcStatusReader(tt.status, tt.statusErr)()
+			defer mockPidCmdLine(tt.pid, tt.cmdLine, tt.cmdLineErrRead, tt.cmdLineErrOpen, t)()
+			defer mockPidStatus(tt.pid, tt.status, tt.statusErrRead, tt.statusErrOpen, t)()
 
 			results := make(chan PSEvent, 1)
 
 			scanner := &PSScanner{
-				enablePpid: tt.enablePpid,
-				eventCh:    results,
+				enablePpid:   tt.enablePpid,
+				eventCh:      results,
+				maxCmdLength: tt.truncate,
 			}
 
 			go func() {
@@ -359,46 +463,71 @@ func TestProcessNewPid(t *testing.T) {
 	}
 }
 
-func mockCmdLineReader(cmdLine []byte, err error) (restore func()) {
-	oldFunc := cmdLineReader
-	cmdLineReader = func(pid int) ([]byte, error) {
-		return cmdLine, err
-	}
-	return func() {
-		cmdLineReader = oldFunc
-	}
+func mockPidStatus(pid int, stat []byte, errRead error, errOpen error, t *testing.T) func() {
+	return mockFile(fmt.Sprintf("/proc/%d/status", pid), stat, errRead, errOpen, t)
 }
 
-func mockProcStatusReader(stat []byte, err error) (restore func()) {
-	oldFunc := procStatusReader
-	procStatusReader = func(pid int) ([]byte, error) {
-		return stat, err
+func mockPidCmdLine(pid int, cmdline []byte, errRead error, errOpen error, t *testing.T) func() {
+	return mockFile(fmt.Sprintf("/proc/%d/cmdline", pid), cmdline, errRead, errOpen, t)
+}
+
+type MockFile struct {
+	content []byte
+	err     error
+}
+
+func (f *MockFile) Close() error {
+	return nil
+}
+
+func (f *MockFile) Read(p []byte) (int, error) {
+	return copy(p, f.content), f.err
+}
+
+// Hook/chain a mocked file into the "open" variable
+func mockFile(name string, content []byte, errRead error, errOpen error, t *testing.T) func() {
+	oldopen := open
+	open = func(n string) (io.ReadCloser, error) {
+		if name == n {
+			if testing.Verbose() {
+				t.Logf("opening mocked file: %s", n)
+			}
+			return &MockFile{
+				content: content,
+				err:     errRead,
+			}, errOpen
+		}
+		return oldopen(n)
 	}
 	return func() {
-		procStatusReader = oldFunc
+		open = oldopen
 	}
 }
 
 func TestNewPSScanner(t *testing.T) {
 	for _, tt := range []struct {
-		name string
-		ppid bool
+		name   string
+		ppid   bool
+		cmdlen int
 	}{
 		{
-			name: "without-ppid",
-			ppid: false,
+			name:   "without-ppid",
+			ppid:   false,
+			cmdlen: 30,
 		},
 		{
-			name: "with-ppid",
-			ppid: true,
+			name:   "with-ppid",
+			ppid:   true,
+			cmdlen: 5000,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			expected := &PSScanner{
-				enablePpid: tt.ppid,
-				eventCh:    nil,
+				enablePpid:   tt.ppid,
+				eventCh:      nil,
+				maxCmdLength: tt.cmdlen,
 			}
-			new := NewPSScanner(tt.ppid)
+			new := NewPSScanner(tt.ppid, tt.cmdlen)
 
 			if !reflect.DeepEqual(new, expected) {
 				t.Errorf("Unexpected scanner initialisation state: got %#v but want %#v", new, expected)
