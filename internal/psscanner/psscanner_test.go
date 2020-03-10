@@ -16,9 +16,9 @@ func TestRun(t *testing.T) {
 		events []string
 	}{
 		{pids: []int{1, 2, 3}, events: []string{
-			"UID=???  PID=3      | the-command",
-			"UID=???  PID=2      | the-command",
-			"UID=???  PID=1      | the-command",
+			"UID=???   PID=3      | the-command",
+			"UID=???   PID=2      | the-command",
+			"UID=???   PID=1      | the-command",
 		}},
 	}
 
@@ -423,7 +423,7 @@ func TestPSEvent(t *testing.T) {
 			pid:      123,
 			ppid:     321,
 			cmd:      "some cmd",
-			expected: "UID=999  PID=123    PPID=321    | some cmd",
+			expected: "UID=999   PID=123    PPID=321    | some cmd",
 		},
 		{
 			name:     "nominal-without-ppid",
@@ -431,7 +431,7 @@ func TestPSEvent(t *testing.T) {
 			pid:      123,
 			ppid:     -1,
 			cmd:      "some cmd",
-			expected: "UID=999  PID=123    | some cmd",
+			expected: "UID=999   PID=123    | some cmd",
 		},
 		{
 			name:     "nocmd-without-ppid",
@@ -439,7 +439,7 @@ func TestPSEvent(t *testing.T) {
 			pid:      123,
 			ppid:     -1,
 			cmd:      "",
-			expected: "UID=999  PID=123    | ",
+			expected: "UID=999   PID=123    | ",
 		},
 		{
 			name:     "nocmd-with-ppid",
@@ -447,7 +447,7 @@ func TestPSEvent(t *testing.T) {
 			pid:      123,
 			ppid:     321,
 			cmd:      "",
-			expected: "UID=999  PID=123    PPID=321    | ",
+			expected: "UID=999   PID=123    PPID=321    | ",
 		},
 		{
 			name:     "nouid",
@@ -455,7 +455,7 @@ func TestPSEvent(t *testing.T) {
 			pid:      123,
 			ppid:     321,
 			cmd:      "some cmd",
-			expected: "UID=???  PID=123    PPID=321    | some cmd",
+			expected: "UID=???   PID=123    PPID=321    | some cmd",
 		},
 	}
 

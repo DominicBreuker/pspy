@@ -26,11 +26,11 @@ func (evt PSEvent) String() string {
 	}
 
 	if evt.PPID == -1 {
-		return fmt.Sprintf("UID=%-4s PID=%-6d | %s", uid, evt.PID, evt.CMD)
+		return fmt.Sprintf("UID=%-5s PID=%-6d | %s", uid, evt.PID, evt.CMD)
 	}
 
 	return fmt.Sprintf(
-		"UID=%-4s PID=%-6d PPID=%-6d | %s", uid, evt.PID, evt.PPID, evt.CMD)
+		"UID=%-5s PID=%-6d PPID=%-6d | %s", uid, evt.PID, evt.PPID, evt.CMD)
 }
 
 func NewPSScanner(ppid bool) *PSScanner {
