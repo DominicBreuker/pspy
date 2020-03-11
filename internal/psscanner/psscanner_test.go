@@ -31,7 +31,7 @@ func TestRun(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer mockPidList(tt.pids)()
+			defer mockPidList(tt.pids, t)()
 			for _, pid := range tt.pids {
 				defer mockPidCmdLine(pid, []byte("the-command"), nil, nil, t)()
 				defer mockPidStatus(pid, []byte{}, nil, nil, t)() // don't mock read value since it's not worth it

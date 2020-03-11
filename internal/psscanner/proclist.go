@@ -1,16 +1,11 @@
 package psscanner
 
 import (
-	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strconv"
 )
-
-var procDirReader = func() ([]os.FileInfo, error) {
-	return ioutil.ReadDir("/proc")
-}
 
 type procList map[int]struct{}
 
@@ -37,15 +32,21 @@ func (pl procList) refresh(p pidProcessor) error {
 }
 
 func getPIDs() ([]int, error) {
-	proc, err := procDirReader()
+	f, err := dirOpen("/proc")
 	if err != nil {
 		return nil, fmt.Errorf("opening proc dir: %v", err)
 	}
+	defer f.Close()
+
+	names, err := f.Readdirnames(-1)
+	if err != nil {
+		return nil, fmt.Errorf("reading proc dir: %v", err)
+	}
 
 	pids := make([]int, 0)
-	for _, f := range proc {
-		pid, err := file2Pid(f)
-		if err != nil {
+	for _, f := range names {
+		pid, err := strconv.Atoi(f)
+		if err != nil || pid <= 0 {
 			continue
 		}
 		pids = append(pids, pid)
@@ -53,17 +54,11 @@ func getPIDs() ([]int, error) {
 	return pids, nil
 }
 
-var errNotAPid = errors.New("not a pid")
+type readDirNamesCloser interface {
+	Readdirnames(n int) (names []string, err error)
+	io.Closer
+}
 
-func file2Pid(f os.FileInfo) (int, error) {
-	if !f.IsDir() {
-		return -1, errNotAPid
-	}
-
-	pid, err := strconv.Atoi(f.Name())
-	if err != nil || pid <= 0 {
-		return -1, errNotAPid
-	}
-
-	return pid, nil
+var dirOpen func(string) (readDirNamesCloser, error) = func(s string) (readDirNamesCloser, error) {
+	return os.Open(s)
 }
