@@ -1,11 +1,13 @@
 package psscanner
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
-	"strings"
+	"syscall"
 )
 
 type PSScanner struct {
@@ -35,6 +37,17 @@ func (evt PSEvent) String() string {
 		"UID=%-5s PID=%-6d PPID=%-6d | %s", uid, evt.PID, evt.PPID, evt.CMD)
 }
 
+var (
+	// identify ppid in stat file
+	ppidRegex, _ = regexp.Compile("\\d+ \\(.*\\) [[:alpha:]] (\\d+)")
+	// hook for testing, directly use Lstat syscall as os.Lstat hides data in Sys member
+	lstat = syscall.Lstat
+	// hook for testing
+	open = func(s string) (io.ReadCloser, error) {
+		return os.Open(s)
+	}
+)
+
 func NewPSScanner(ppid bool, cmdLength int) *PSScanner {
 	return &PSScanner{
 		enablePpid:   ppid,
@@ -59,9 +72,10 @@ func (p *PSScanner) Run(triggerCh chan struct{}) (chan PSEvent, chan error) {
 }
 
 func (p *PSScanner) processNewPid(pid int) {
-	// quickly load data into memory before processing it, with preferance for cmd
+	statInfo := syscall.Stat_t{}
+	errStat := lstat(fmt.Sprintf("/proc/%d", pid), &statInfo)
 	cmdLine, errCmdLine := readFile(fmt.Sprintf("/proc/%d/cmdline", pid), p.maxCmdLength)
-	status, errStatus := readFile(fmt.Sprintf("/proc/%d/status", pid), 512)
+	ppid, _ := p.getPpid(pid)
 
 	cmd := "???" // process probably terminated
 	if errCmdLine == nil {
@@ -73,52 +87,28 @@ func (p *PSScanner) processNewPid(pid int) {
 		cmd = string(cmdLine)
 	}
 
-	uid, ppid := -1, -1
-	if errStatus == nil {
-		uid, ppid, errStatus = p.parseProcessStatus(status)
-		if errStatus != nil {
-			uid = -1
-			ppid = -1
-		}
+	uid := -1
+	if errStat == nil {
+		uid = int(statInfo.Uid)
 	}
 
 	p.eventCh <- PSEvent{UID: uid, PID: pid, PPID: ppid, CMD: cmd}
 }
 
-func (p *PSScanner) parseProcessStatus(status []byte) (int, int, error) {
-	lines := strings.Split(string(status), "\n")
-	if len(lines) < 9 {
-		return -1, -1, fmt.Errorf("no uid information")
+func (p *PSScanner) getPpid(pid int) (int, error) {
+	if !p.enablePpid {
+		return -1, nil
 	}
 
-	uidL := strings.Split(lines[8], "\t")
-	if len(uidL) < 2 {
-		return -1, -1, fmt.Errorf("uid line read incomplete")
-	}
-
-	uid, err := strconv.Atoi(uidL[1])
+	stat, err := readFile(fmt.Sprintf("/proc/%d/stat", pid), 512)
 	if err != nil {
-		return -1, -1, fmt.Errorf("converting %s to int: %v", uidL[1], err)
+		return -1, err
 	}
 
-	ppid := -1
-	if p.enablePpid {
-		ppidL := strings.Split(lines[6], "\t")
-		if len(ppidL) < 2 {
-			return -1, -1, fmt.Errorf("ppid line read incomplete")
-		}
-
-		ppid, err = strconv.Atoi(ppidL[1])
-		if err != nil {
-			return -1, -1, fmt.Errorf("converting %s to int: %v", ppidL[1], err)
-		}
+	if m := ppidRegex.FindStringSubmatch(string(stat)); m != nil {
+		return strconv.Atoi(m[1])
 	}
-
-	return uid, ppid, nil
-}
-
-var open func(string) (io.ReadCloser, error) = func(s string) (io.ReadCloser, error) {
-	return os.Open(s)
+	return -1, errors.New("corrupt stat file")
 }
 
 // no nonsense file reading
