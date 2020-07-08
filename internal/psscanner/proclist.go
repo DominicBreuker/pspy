@@ -111,12 +111,22 @@ func getUID(pid int) (int, error) {
 		return -1, fmt.Errorf("no uid information")
 	}
 
-	uidL := strings.Split(lines[8], "\t")
-	if len(uidL) < 2 {
+	var uidL string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Uid") == true {
+			uidL = line
+		}
+	}
+	if len(uidL) == 0 {
+		return -1, fmt.Errorf("failed finding uid line")
+	}
+
+	uidV := strings.Split(uidL, "\t")
+	if len(uidV) < 2 {
 		return -1, fmt.Errorf("uid line read incomplete")
 	}
 
-	uid, err := strconv.Atoi(uidL[1])
+	uid, err := strconv.Atoi(uidV[1])
 	if err != nil {
 		return -1, fmt.Errorf("converting %s to int: %v", uidL[1], err)
 	}
