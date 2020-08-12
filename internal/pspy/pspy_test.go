@@ -17,17 +17,47 @@ func TestInitFSW(t *testing.T) {
 	fsw := newMockFSWatcher()
 	rdirs := make([]string, 0)
 	dirs := make([]string, 0)
+	sigCh := make(chan os.Signal)
 	go func() {
 		fsw.initErrCh <- errors.New("error1")
 		fsw.initErrCh <- errors.New("error2")
 		close(fsw.initDoneCh)
 	}()
 
-	initFSW(fsw, rdirs, dirs, l)
+	if !initFSW(fsw, rdirs, dirs, l, sigCh) {
+		t.Error("unexpected return value")
+	}
 
 	expectMessage(t, l.Error, "initializing fs watcher: error1")
 	expectMessage(t, l.Error, "initializing fs watcher: error2")
 	expectClosed(t, fsw.initDoneCh)
+}
+
+func TestInitFSWInterrupt(t *testing.T) {
+	l := newMockLogger()
+	fsw := newMockFSWatcher()
+	rdirs := make([]string, 0)
+	dirs := make([]string, 0)
+	sigCh := make(chan os.Signal, 0)
+	done := make(chan struct{})
+
+	go func() {
+		<-time.After(100 * time.Millisecond)
+		sigCh <- os.Interrupt
+	}()
+
+	go func() {
+		if initFSW(fsw, rdirs, dirs, l, sigCh) {
+			t.Error("unexpected return value")
+		}
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Error("timout")
+	}
 }
 
 // very flaky test... refactor code!
@@ -35,6 +65,7 @@ func TestStartFSW(t *testing.T) {
 	l := newMockLogger()
 	fsw := newMockFSWatcher()
 	drainFor := 100 * time.Millisecond
+	sigCh := make(chan os.Signal)
 
 	go func() {
 		fsw.runTriggerCh <- struct{}{} // trigger sent while draining
@@ -47,12 +78,41 @@ func TestStartFSW(t *testing.T) {
 	}()
 
 	// sends no events and triggers from the drain phase
-	triggerCh, fsEventCh := startFSW(fsw, l, drainFor)
+	triggerCh, fsEventCh, ok := startFSW(fsw, l, drainFor, sigCh)
+	if !ok {
+		t.Error("unexpected return value")
+	}
 	expectMessage(t, l.Info, "Draining file system events due to startup...")
 	expectMessage(t, l.Error, "ERROR: error sent while draining")
 	expectMessage(t, l.Info, "done")
 	expectTrigger(t, triggerCh)
 	expectMessage(t, fsEventCh, "event sent after draining")
+}
+
+func TestStartFSWInterrupt(t *testing.T) {
+	l := newMockLogger()
+	fsw := newMockFSWatcher()
+	drainFor := 500 * time.Millisecond
+	sigCh := make(chan os.Signal)
+	done := make(chan struct{})
+
+	go func() {
+		<-time.After(100 * time.Millisecond)
+		sigCh <- os.Interrupt
+	}()
+
+	go func() {
+		if _, _, ok := startFSW(fsw, l, drainFor, sigCh); ok {
+			t.Error("unexpected return value")
+		}
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Error("timout")
+	}
 }
 
 func TestStartPSS(t *testing.T) {
@@ -95,7 +155,7 @@ func TestStart(t *testing.T) {
 		close(fsw.initDoneCh)
 		<-time.After(2 * drainFor)
 		fsw.runTriggerCh <- struct{}{}
-		pss.runEventCh <- psscanner.PSEvent{UID: 1000, PID: 12345, CMD: "pss event"}
+		pss.runEventCh <- psscanner.PSEvent{UID: 1000, PID: 12345, PPID: 54321, CMD: "pss event"}
 		pss.runErrCh <- errors.New("pss error")
 		fsw.runEventCh <- "fsw event"
 		fsw.runErrCh <- errors.New("fsw error")
@@ -108,7 +168,7 @@ func TestStart(t *testing.T) {
 	<-time.After(2 * drainFor)
 	expectMessage(t, l.Info, "done")
 	expectTrigger(t, pss.runTriggerCh) // pss receives triggers from fsw
-	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: UID=1000 PID=12345  | pss event", logging.ColorPurple))
+	expectMessage(t, l.Event, fmt.Sprintf("%d CMD: UID=1000  PID=12345  PPID=54321  | pss event", logging.ColorPurple))
 	expectMessage(t, l.Error, "ERROR: pss error")
 	expectMessage(t, l.Event, fmt.Sprintf("%d FS: fsw event", logging.ColorNone))
 	expectMessage(t, l.Error, "ERROR: fsw error")

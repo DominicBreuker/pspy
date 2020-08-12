@@ -1,257 +1,233 @@
 package psscanner
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
+	"strings"
 	"testing"
-	"time"
 )
-
-// GetCmd
-
-func TestGetCmd(t *testing.T) {
-	tests := []struct {
-		pid     int
-		cmdLine []byte
-		cmdErr  error
-		cmd     string
-		err     string
-	}{
-		{pid: 1, cmdLine: []byte("abc"), cmdErr: nil, cmd: "abc", err: ""},
-		{pid: 1, cmdLine: []byte(""), cmdErr: nil, cmd: "", err: ""},                                                 // can work with empty result
-		{pid: 1, cmdLine: []byte("abc\x00123"), cmdErr: nil, cmd: "abc 123", err: ""},                                // turns null bytes into spaces
-		{pid: 1, cmdLine: []byte("abc"), cmdErr: errors.New("file-system-error"), cmd: "", err: "file-system-error"}, // returns error from file reader
-	}
-
-	for _, tt := range tests {
-		restore := mockCmdLineReader(tt.cmdLine, tt.cmdErr)
-		cmd, err := getCmd(tt.pid)
-		if cmd != tt.cmd {
-			t.Errorf("Wrong cmd line returned: got %s but want %s", cmd, tt.cmd)
-		}
-		if (err != nil || tt.err != "") && fmt.Sprintf("%v", err) != tt.err {
-			t.Errorf("Wrong error returned: got %v but want %s", err, tt.err)
-		}
-		restore()
-	}
-}
-
-func mockCmdLineReader(cmdLine []byte, err error) (restore func()) {
-	oldFunc := cmdLineReader
-	cmdLineReader = func(pid int) ([]byte, error) {
-		return cmdLine, err
-	}
-	return func() {
-		cmdLineReader = oldFunc
-	}
-}
 
 // GetPIDs
 
 func TestGetPIDs(t *testing.T) {
 	tests := []struct {
-		proc    []os.FileInfo
-		procErr error
-		pids    []int
-		err     string
+		name        string
+		proc        []string
+		procErrOpen error
+		procErrRead error
+		pids        []int
+		err         string
 	}{
-		{proc: []os.FileInfo{newMockDir("42"), newMockDir("somedir")}, procErr: nil, pids: []int{42}, err: ""},                   // reads numbers and ignores everything else
-		{proc: []os.FileInfo{newMockDir("42"), newMockFile("13")}, procErr: nil, pids: []int{42}, err: ""},                       // reads directories and ignores files
-		{proc: []os.FileInfo{newMockDir("0"), newMockDir("-1")}, procErr: nil, pids: []int{}, err: ""},                           // ignores 0 and negative numbers
-		{proc: []os.FileInfo{}, procErr: nil, pids: []int{}, err: ""},                                                            // can handle empty procfs
-		{proc: []os.FileInfo{}, procErr: errors.New("file-system-error"), pids: nil, err: "opening proc dir: file-system-error"}, // returns errors
+		{
+			name:        "numbers-only",
+			proc:        []string{"42", "somedir"},
+			procErrOpen: nil,
+			procErrRead: nil,
+			pids:        []int{42},
+			err:         "",
+		},
+		{
+			name:        "multiple-entries",
+			proc:        []string{"42", "13"},
+			procErrOpen: nil,
+			procErrRead: nil,
+			pids:        []int{42, 13},
+			err:         "",
+		},
+		{
+			name:        "ignores-lte-0",
+			proc:        []string{"0", "-1"},
+			procErrOpen: nil,
+			procErrRead: nil,
+			pids:        []int{},
+			err:         "",
+		},
+		{
+			name:        "empty-procfs",
+			proc:        []string{},
+			procErrOpen: nil,
+			procErrRead: nil,
+			pids:        []int{},
+			err:         "",
+		},
+		{
+			name:        "handle-open-error",
+			proc:        []string{},
+			procErrOpen: errors.New("file-system-error"),
+			procErrRead: nil,
+			pids:        nil,
+			err:         "opening proc dir: file-system-error",
+		},
+		{
+			name:        "handle-read-error",
+			proc:        []string{},
+			procErrOpen: nil,
+			procErrRead: errors.New("file-system-error"),
+			pids:        nil,
+			err:         "reading proc dir: file-system-error",
+		},
 	}
 
 	for _, tt := range tests {
-		restore := mockProcDirReader(tt.proc, tt.procErr)
-		pids, err := getPIDs()
-		if !reflect.DeepEqual(pids, tt.pids) {
-			t.Errorf("Wrong pids returned: got %v but want %v", pids, tt.pids)
-		}
-		if (err != nil || tt.err != "") && fmt.Sprintf("%v", err) != tt.err {
-			t.Errorf("Wrong error returned: got %v but want %s", err, tt.err)
-		}
-		restore()
+		t.Run(tt.name, func(t *testing.T) {
+			defer mockDir("/proc", tt.proc, tt.procErrRead, tt.procErrOpen, t)()
+			pids, err := getPIDs()
+			if !reflect.DeepEqual(pids, tt.pids) {
+				t.Errorf("Wrong pids returned: got %v but want %v", pids, tt.pids)
+			}
+			if (err != nil || tt.err != "") && fmt.Sprintf("%v", err) != tt.err {
+				t.Errorf("Wrong error returned: got %v but want %s", err, tt.err)
+			}
+		})
 	}
 }
 
-func mockProcDirReader(proc []os.FileInfo, err error) (restore func()) {
-	oldFunc := procDirReader
-	procDirReader = func() ([]os.FileInfo, error) {
-		return proc, err
-	}
-	return func() {
-		procDirReader = oldFunc
-	}
+type MockDir struct {
+	names []string
+	err   error
 }
 
-func newMockDir(name string) *mockFileInfo {
-	return &mockFileInfo{
-		name:  name,
-		isDir: true,
-	}
-}
-
-func newMockFile(name string) *mockFileInfo {
-	return &mockFileInfo{
-		name:  name,
-		isDir: false,
-	}
-}
-
-type mockFileInfo struct {
-	name  string
-	isDir bool
-}
-
-func (f *mockFileInfo) Name() string {
-	return f.name
-}
-func (f *mockFileInfo) Size() int64 {
-	return 0
-}
-func (f *mockFileInfo) Mode() os.FileMode {
-	return 0
-}
-func (f *mockFileInfo) ModTime() time.Time {
-	return time.Now()
-}
-func (f *mockFileInfo) IsDir() bool {
-	return f.isDir
-}
-func (f *mockFileInfo) Sys() interface{} {
+func (f *MockDir) Close() error {
 	return nil
 }
 
-// GetUID
-
-func TestGetUID(t *testing.T) {
-	completeStatus, _ := hex.DecodeString("4e616d653a0963726f6e0a556d61736b3a09303032320a53746174653a09532028736c656570696e67290a546769643a09370a4e6769643a09300a5069643a09370a505069643a09350a5472616365725069643a09300a5569643a09300930093009300a4769643a09300930093009300a464453697a653a0936340a47726f7570733a0930200a4e53746769643a09370a4e537069643a09370a4e53706769643a09310a4e537369643a09310a566d5065616b3a092020203238303132206b420a566d53697a653a092020203237393932206b420a566d4c636b3a092020202020202030206b420a566d50696e3a092020202020202030206b420a566d48574d3a092020202032333532206b420a566d5253533a092020202032333532206b420a527373416e6f6e3a092020202020323430206b420a52737346696c653a092020202032313132206b420a52737353686d656d3a092020202020202030206b420a566d446174613a092020202020333430206b420a566d53746b3a092020202020313332206b420a566d4578653a092020202020203434206b420a566d4c69623a092020202032383536206b420a566d5054453a092020202020203736206b420a566d504d443a092020202020203132206b420a566d537761703a092020202020202030206b420a48756765746c6250616765733a092020202020202030206b420a546872656164733a09310a536967513a09302f34373834320a536967506e643a09303030303030303030303030303030300a536864506e643a09303030303030303030303030303030300a536967426c6b3a09303030303030303030303030303030300a53696749676e3a09303030303030303030303030303030360a5369674367743a09303030303030303138303031303030310a436170496e683a09303030303030303061383034323566620a43617050726d3a09303030303030303061383034323566620a4361704566663a09303030303030303061383034323566620a436170426e643a09303030303030303061383034323566620a436170416d623a09303030303030303030303030303030300a536563636f6d703a09320a437075735f616c6c6f7765643a09330a437075735f616c6c6f7765645f6c6973743a09302d310a4d656d735f616c6c6f7765643a09310a4d656d735f616c6c6f7765645f6c6973743a09300a766f6c756e746172795f637478745f73776974636865733a0932350a6e6f6e766f6c756e746172795f637478745f73776974636865733a09310a")
-	uidLineBroken, _ := hex.DecodeString("4e616d653a0963726f6e0a556d61736b3a09303032320a53746174653a09532028736c656570696e67290a546769643a09370a4e6769643a09300a5069643a09370a505069643a09350a5472616365725069643a09300a5569643a")
-	notEnoughLines, _ := hex.DecodeString("4e616d653a0963726f6e0a556d61736b3a09303032320a537461")
-	tests := []struct {
-		pid     int
-		stat    []byte
-		statErr error
-		uid     int
-		err     string
-	}{
-		{pid: 7, stat: completeStatus, statErr: nil, uid: 0, err: ""},                                           // can read normal stat
-		{pid: 7, stat: uidLineBroken, statErr: nil, uid: -1, err: "uid line read incomplete"},                   // errors on incomplete Uid line
-		{pid: 7, stat: notEnoughLines, statErr: nil, uid: -1, err: "no uid information"},                        // errors for insufficient lines
-		{pid: 7, stat: []byte(""), statErr: nil, uid: -1, err: "no uid information"},                            // errors for insufficient lines
-		{pid: 7, stat: []byte(""), statErr: errors.New("file-system-error"), uid: -1, err: "file-system-error"}, // returns file system errors
+func min(a, b int) int {
+	if a > b {
+		return b
 	}
-
-	for _, tt := range tests {
-		restore := mockProcStatusReader(tt.stat, tt.statErr)
-		uid, err := getUID(tt.pid)
-		if uid != tt.uid {
-			fmt.Printf("STAT: %s", tt.stat)
-			t.Errorf("Wrong uid returned: got %d but want %d", uid, tt.uid)
-		}
-		if (err != nil || tt.err != "") && fmt.Sprintf("%v", err) != tt.err {
-			t.Errorf("Wrong error returned: got %v but want %s", err, tt.err)
-		}
-		restore()
-	}
+	return a
 }
 
-func mockProcStatusReader(stat []byte, err error) (restore func()) {
-	oldFunc := procStatusReader
-	procStatusReader = func(pid int) ([]byte, error) {
-		return stat, err
+func (f *MockDir) Readdirnames(n int) (names []string, err error) {
+	if n < 0 {
+		return f.names, f.err
+	}
+	return f.names[:min(n, len(f.names))], f.err
+}
+
+// Hook/chain a mocked file into the "open" variable
+func mockDir(name string, names []string, errRead error, errOpen error, t *testing.T) func() {
+	oldopen := dirOpen
+	dirOpen = func(n string) (readDirNamesCloser, error) {
+		if name == n {
+			if testing.Verbose() {
+				t.Logf("opening mocked dir: %s", n)
+			}
+			return &MockDir{
+				names: names,
+				err:   errRead,
+			}, errOpen
+		}
+		return oldopen(n)
 	}
 	return func() {
-		procStatusReader = oldFunc
+		dirOpen = oldopen
 	}
 }
 
-// refresh
+type mockPidProcessor struct {
+	t    *testing.T
+	pids []int
+}
+
+func (m *mockPidProcessor) processNewPid(pid int) {
+	if testing.Verbose() {
+		m.t.Logf("proc %d processed", pid)
+	}
+	m.pids = append(m.pids, pid)
+}
+
+var unit = struct{}{}
 
 func TestRefresh(t *testing.T) {
 	tests := []struct {
-		eventCh   chan PSEvent
-		pl        procList
-		newPids   []int
-		pidsAfter []int
-		events    []string
+		name          string
+		pl            procList
+		newPids       []int
+		plAfter       procList
+		pidsProcessed []int
 	}{
-		{eventCh: make(chan PSEvent), pl: procList{}, newPids: []int{1, 2, 3}, pidsAfter: []int{3, 2, 1}, events: []string{
-			"UID=???  PID=3      | the-command",
-			"UID=???  PID=2      | the-command",
-			"UID=???  PID=1      | the-command",
-		}},
-		{eventCh: make(chan PSEvent), pl: procList{1: "pid-found-before"}, newPids: []int{1, 2, 3}, pidsAfter: []int{1, 3, 2}, events: []string{
-			"UID=???  PID=3      | the-command",
-			"UID=???  PID=2      | the-command",
-		}}, // no events emitted for PIDs already known
+		{
+			name:          "nominal",
+			pl:            procList{},
+			newPids:       []int{1, 2, 3},
+			plAfter:       procList{1: unit, 2: unit, 3: unit},
+			pidsProcessed: []int{3, 2, 1},
+		},
+		{
+			name:          "merge",
+			pl:            procList{1: unit},
+			newPids:       []int{1, 2, 3},
+			plAfter:       procList{1: unit, 2: unit, 3: unit},
+			pidsProcessed: []int{3, 2},
+		},
+		{
+			name:          "nothing-new",
+			pl:            procList{1: unit, 2: unit, 3: unit},
+			newPids:       []int{1, 2, 3},
+			plAfter:       procList{1: unit, 2: unit, 3: unit},
+			pidsProcessed: []int{},
+		},
 	}
 
 	for _, tt := range tests {
-		restoreGetPIDs := mockPidList(tt.newPids)
-		restoreCmdLineReader := mockCmdLineReader([]byte("the-command"), nil)
-		restoreProcStatusReader := mockProcStatusReader([]byte(""), nil) // don't mock read value since it's not worth it
+		t.Run(tt.name, func(t *testing.T) {
+			defer mockPidList(tt.newPids, t)()
 
-		events := make([]string, 0)
-		done := make(chan struct{})
-		go func() {
-			for e := range tt.eventCh {
-				events = append(events, e.String())
+			m := &mockPidProcessor{t, []int{}}
+			tt.pl.refresh(m)
+
+			if !reflect.DeepEqual(m.pids, tt.pidsProcessed) {
+				t.Errorf("Unexpected pids got processed: got %v but want %v", m.pids, tt.pidsProcessed)
 			}
-			done <- struct{}{}
-		}()
-		tt.pl.refresh(tt.eventCh)
-		close(tt.eventCh)
-		<-done
-
-		restoreProcStatusReader()
-		restoreCmdLineReader()
-		restoreGetPIDs()
-
-		pidsAfter := getPids(&tt.pl)
-
-		for _, pid := range tt.pidsAfter {
-			if !contains(pidsAfter, pid) {
-				t.Errorf("PID %d should be in list %v but was not!", pid, pidsAfter)
+			if !reflect.DeepEqual(tt.pl, tt.plAfter) {
+				t.Errorf("Unexpected pids stored in procList: got %v but want %v", tt.pl, tt.plAfter)
 			}
-		}
-		for _, pid := range pidsAfter {
-			if !contains(tt.pidsAfter, pid) {
-				t.Errorf("PID %d should be in list %v but was not!", pid, pidsAfter)
-			}
-		}
-		if !reflect.DeepEqual(events, tt.events) {
-			t.Errorf("Wrong events returned: got %v but want %v", events, tt.events)
-		}
+		})
 	}
 }
 
-func contains(list []int, v int) bool {
-	for _, i := range list {
-		if i == v {
-			return true
-		}
+// separate test for failing, only one case where getPids fails
+func TestRefreshFail(t *testing.T) {
+	e := errors.New("file-system-error")
+	for _, tt := range []struct {
+		name    string
+		errRead error
+		errOpen error
+	}{
+		{
+			name:    "open-dir-fail",
+			errRead: nil,
+			errOpen: e,
+		},
+		{
+			name:    "read-dir-fail",
+			errRead: e,
+			errOpen: nil,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			defer mockDir("/proc", []string{}, tt.errRead, tt.errOpen, t)()
+			m := &mockPidProcessor{t, []int{}}
+			pl := procList{1: unit}
+			err := pl.refresh(m)
+			if err == nil {
+				t.Errorf("Expected an error")
+			} else {
+				if strings.Index(err.Error(), e.Error()) == -1 {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+
+		})
 	}
-	return false
 }
 
-func mockPidList(pids []int) func() {
-	dirs := make([]os.FileInfo, 0)
+func mockPidList(pids []int, t *testing.T) func() {
+	dirs := make([]string, 0)
 	for _, pid := range pids {
-		dirs = append(dirs, newMockDir(fmt.Sprintf("%d", pid)))
+		dirs = append(dirs, fmt.Sprintf("%d", pid))
 	}
-	restore := mockProcDirReader(dirs, nil)
-	return restore
-}
-
-func getPids(pl *procList) []int {
-	pids := make([]int, 0)
-	for pid := range *pl {
-		pids = append(pids, pid)
-	}
-	return pids
+	return mockDir("/proc", dirs, nil, nil, t)
 }
