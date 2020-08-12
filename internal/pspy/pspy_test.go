@@ -163,7 +163,7 @@ func TestStart(t *testing.T) {
 	}()
 
 	exitCh := Start(cfg, b, sigCh)
-	expectMessage(t, l.Info, "Config: Printing events (colored=true): processes=true | file-system-events=true ||| Scannning for processes every 16m39s and on inotify events ||| Watching directories: [rdir1 rdir2] (recursive) | [dir1 dir2] (non-recursive)")
+	expectMessage(t, l.Info, "Config: Printing events (colored=true): processes=true | file-system-events=true ||| Scanning for processes every 16m39s and on inotify events ||| Watching directories: [rdir1 rdir2] (recursive) | [dir1 dir2] (non-recursive)")
 	expectMessage(t, l.Info, "Draining file system events due to startup...")
 	<-time.After(2 * drainFor)
 	expectMessage(t, l.Info, "done")
