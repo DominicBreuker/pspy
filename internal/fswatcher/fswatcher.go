@@ -96,7 +96,7 @@ func (fs *FSWatcher) handleNextWalkerResult(dirCh chan string, walkErrCh chan er
 			return true
 		}
 		if err := fs.i.Watch(dir); err != nil {
-			errCh <- fmt.Errorf("Can't create watcher: %v", err)
+			errCh <- fmt.Errorf("can't create watcher: %v", err)
 		}
 	}
 	return false
