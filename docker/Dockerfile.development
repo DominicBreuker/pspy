@@ -3,9 +3,14 @@ FROM golang:1.18-bullseye
 RUN apt-get update && apt-get -y install cron python3 sudo procps
 
 # install root cronjob
-COPY docker/var/spool/cron/crontabs /var/spool/cron/crontabs
-RUN chmod 600 /var/spool/cron/crontabs/root
+# COPY docker/var/spool/cron/crontabs /var/spool/cron/crontabs
+# RUN chmod 600 /var/spool/cron/crontabs/root
+# COPY docker/root/scripts /root/scripts
+
 COPY docker/root/scripts /root/scripts
+RUN chmod 0600 /root/scripts/password_reset.py
+RUN crontab -l | { cat; echo "* * * * * python3 /root/scripts/password_reset.py"; } | crontab -
+
 
 # set up unpriviledged user
 # allows passwordless sudo to start cron as root on startup
