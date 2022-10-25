@@ -1,4 +1,4 @@
-FROM golang:1.18-bullseye
+FROM golang:1.19-bullseye
 
 RUN apt-get update && apt-get -y install cron python3 sudo procps
 
@@ -8,7 +8,8 @@ RUN apt-get update && apt-get -y install cron python3 sudo procps
 COPY main.go /go/src/github.com/dominicbreuker/pspy/main.go
 COPY cmd /go/src/github.com/dominicbreuker/pspy/cmd
 COPY internal /go/src/github.com/dominicbreuker/pspy/internal
-COPY vendor /go/src/github.com/dominicbreuker/pspy/vendor
+COPY go.mod /go/src/github.com/dominicbreuker/pspy/go.mod
+COPY go.sum /go/src/github.com/dominicbreuker/pspy/go.sum
 COPY .git /go/src/github.com/dominicbreuker/pspy/.git
 
 # run tests

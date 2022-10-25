@@ -47,30 +47,30 @@ build:
 	docker run -it \
 		       --rm \
 		       -v $(PROJECT_DIR):/go/src/github.com/dominicbreuker/pspy \
-			   -w "/go/src/github.com/dominicbreuker" \
+			   -w "/go/src/github.com/dominicbreuker/pspy" \
 			   --env CGO_ENABLED=0 \
 			   --env GOOS=linux \
 			  --env GOARCH=386 \
-	           $(BUILD_IMAGE) /bin/sh -c "go build -a -ldflags '-s -w -X main.version=${VERSION} -X main.commit=${BUILD_SHA} -extldflags \"-static\"' -o pspy/bin/pspy32 pspy/main.go"
+	           $(BUILD_IMAGE) /bin/sh -c "go build -a -ldflags '-s -w -X main.version=${VERSION} -X main.commit=${BUILD_SHA} -extldflags \"-static\"' -o bin/pspy32 main.go"
 	docker run -it \
 		       --rm \
 		       -v $(PROJECT_DIR):/go/src/github.com/dominicbreuker/pspy \
-			   -w "/go/src/github.com/dominicbreuker" \
+			   -w "/go/src/github.com/dominicbreuker/pspy" \
 			   --env CGO_ENABLED=0 \
 			   --env GOOS=linux \
 			   --env GOARCH=amd64 \
-	           $(BUILD_IMAGE) /bin/sh -c "go build -a -ldflags '-s -w -X main.version=${VERSION} -X main.commit=${BUILD_SHA} -extldflags \"-static\"' -o pspy/bin/pspy64 pspy/main.go"
+	           $(BUILD_IMAGE) /bin/sh -c "go build -a -ldflags '-s -w -X main.version=${VERSION} -X main.commit=${BUILD_SHA} -extldflags \"-static\"' -o bin/pspy64 main.go"
 	docker run -it \
 		       --rm \
 		       -v $(PROJECT_DIR):/go/src/github.com/dominicbreuker/pspy \
-			   -w "/go/src/github.com/dominicbreuker" \
+			   -w "/go/src/github.com/dominicbreuker/pspy" \
 			   --env GOOS=linux \
 			   --env GOARCH=386 \
-	           $(BUILD_IMAGE) /bin/sh -c "go build -ldflags '-w -s -X main.version=${VERSION} -X main.commit=${BUILD_SHA}' -o pspy/bin/pspy32s pspy/main.go && upx pspy/bin/pspy32s"
+	           $(BUILD_IMAGE) /bin/sh -c "go build -ldflags '-w -s -X main.version=${VERSION} -X main.commit=${BUILD_SHA}' -o bin/pspy32s main.go && upx bin/pspy32s"
 	docker run -it \
 		       --rm \
 		       -v $(PROJECT_DIR):/go/src/github.com/dominicbreuker/pspy \
-			   -w "/go/src/github.com/dominicbreuker" \
+			   -w "/go/src/github.com/dominicbreuker/pspy" \
 			   --env GOOS=linux \
 			   --env GOARCH=amd64 \
-	           $(BUILD_IMAGE) /bin/sh -c "go build -ldflags '-w -s -X main.version=${VERSION} -X main.commit=${BUILD_SHA}' -o pspy/bin/pspy64s pspy/main.go && upx pspy/bin/pspy64s"
+	           $(BUILD_IMAGE) /bin/sh -c "go build -ldflags '-w -s -X main.version=${VERSION} -X main.commit=${BUILD_SHA}' -o bin/pspy64s main.go && upx bin/pspy64s"

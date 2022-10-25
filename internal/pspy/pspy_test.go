@@ -68,8 +68,6 @@ func TestStartFSW(t *testing.T) {
 	sigCh := make(chan os.Signal)
 
 	go func() {
-		fsw.runTriggerCh <- struct{}{} // trigger sent while draining
-		fsw.runEventCh <- "event sent while draining"
 		fsw.runErrCh <- errors.New("error sent while draining")
 		<-time.After(drainFor) // ensure draining is over
 		fsw.runTriggerCh <- struct{}{}
@@ -292,6 +290,10 @@ func (fsw *mockFSWatcher) Init(rdirs, dirs []string) (chan error, chan struct{})
 
 func (fsw *mockFSWatcher) Run() (chan struct{}, chan string, chan error) {
 	return fsw.runTriggerCh, fsw.runEventCh, fsw.runErrCh
+}
+
+func (fsw *mockFSWatcher) Enable() {
+	return
 }
 
 // PSScanner
