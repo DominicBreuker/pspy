@@ -25,6 +25,7 @@ type FSWatcher struct {
 	w           Walker
 	maxWatchers int
 	eventSize   int
+	drain       bool
 }
 
 func NewFSWatcher() *FSWatcher {
@@ -33,7 +34,12 @@ func NewFSWatcher() *FSWatcher {
 		w:           walker.NewWalker(),
 		maxWatchers: inotify.MaxWatchers,
 		eventSize:   inotify.EventSize,
+		drain:       true,
 	}
+}
+
+func (fs *FSWatcher) Enable() {
+	fs.drain = false
 }
 
 func (fs *FSWatcher) Close() {
@@ -116,6 +122,10 @@ func (fs *FSWatcher) observe(triggerCh chan struct{}, dataCh chan []byte, errCh 
 
 	for {
 		n, err := fs.i.Read(buf)
+		if fs.drain {
+			continue
+		}
+
 		triggerCh <- struct{}{}
 		if err != nil {
 			errCh <- fmt.Errorf("reading inotify buffer: %v", err)

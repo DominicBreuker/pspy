@@ -24,6 +24,7 @@ type Logger interface {
 type FSWatcher interface {
 	Init(rdirs, dirs []string) (chan error, chan struct{})
 	Run() (chan struct{}, chan string, chan error)
+	Enable()
 }
 
 type PSScanner interface {
@@ -110,7 +111,7 @@ func startFSW(fsw FSWatcher, logger Logger, drainFor time.Duration, sigCh <-chan
 
 	// ignore all file system events created on startup
 	logger.Infof("Draining file system events due to startup...")
-	ok = drainEventsFor(triggerCh, fsEventCh, drainFor, sigCh)
+	ok = drainEventsFor(triggerCh, fsEventCh, drainFor, sigCh, fsw)
 	logger.Infof("done")
 	return
 }
@@ -137,14 +138,13 @@ func logErrors(errCh chan error, logger Logger) {
 	}
 }
 
-func drainEventsFor(triggerCh chan struct{}, eventCh chan string, d time.Duration, sigCh <-chan os.Signal) bool {
+func drainEventsFor(triggerCh chan struct{}, eventCh chan string, d time.Duration, sigCh <-chan os.Signal, fsw FSWatcher) bool {
 	for {
 		select {
 		case <-sigCh:
 			return false
-		case <-triggerCh:
-		case <-eventCh:
 		case <-time.After(d):
+			fsw.Enable()
 			return true
 		}
 	}
